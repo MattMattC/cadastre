@@ -1,0 +1,134 @@
+.map-page {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.map-page__topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(
+    to bottom,
+    rgba(15, 28, 46, 0.55),
+    rgba(15, 28, 46, 0)
+  );
+  pointer-events: none;
+}
+
+.map-page__topbar > * {
+  pointer-events: auto;
+}
+
+.map-page__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+.map-page__logo {
+  font-size: 22px;
+}
+
+.map-page__title {
+  font-size: 18px;
+}
+
+.map-page__search {
+  flex: 1;
+  max-width: 520px;
+}
+
+.map-page__map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.map-page__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 8px 16px;
+  background: rgba(15, 28, 46, 0.82);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+
+.map-page__hint--error {
+  background: #b3261e;
+}
+
+.map-page__parcelle {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  background: var(--color-panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.map-page__parcelle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.map-page__parcelle-meta {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.map-page__annotate {
+  flex-shrink: 0;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(27, 110, 194, 0.4);
+}
+
+.map-page__annotate:hover {
+  background: var(--color-accent-dark);
+}
+
+@media (max-width: 560px) {
+  .map-page__brand .map-page__title {
+    display: none;
+  }
+
+  .map-page__topbar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+}

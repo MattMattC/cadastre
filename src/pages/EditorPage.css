@@ -1,0 +1,43 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.editor__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #e8ebf0;
+}
+
+/* Fond cadastre verrouillé. */
+.editor__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* Couche de dessin Konva par-dessus. */
+.editor__draw {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.editor__toast {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1300;
+  padding: 10px 18px;
+  background: rgba(15, 28, 46, 0.9);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+}

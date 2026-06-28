@@ -1,11 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   MapContainer,
   TileLayer,
   LayersControl,
   Marker,
   Popup,
+  Polygon,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -17,7 +19,7 @@ import {
   DEFAULT_VIEW,
   ADDRESS_ZOOM,
 } from "../config";
-import type { AddressSuggestion } from "../types";
+import type { AddressSuggestion, Parcelle } from "../types";
 
 // Corrige le chemin des icônes Leaflet quand on passe par un bundler (Vite).
 const defaultIcon = L.icon({
@@ -33,24 +35,40 @@ L.Marker.prototype.options.icon = defaultIcon;
 
 interface MapViewProps {
   selected: AddressSuggestion | null;
+  parcelle: Parcelle | null;
+  onMapClick: (lat: number, lon: number) => void;
 }
 
 // Recentre la carte quand une adresse est sélectionnée.
-function FlyToSelection({ selected }: MapViewProps) {
+function FlyToSelection({ selected }: { selected: AddressSuggestion | null }) {
   const map = useMap();
-
   useEffect(() => {
     if (selected) {
-      map.flyTo([selected.lat, selected.lon], ADDRESS_ZOOM, {
-        duration: 1.2,
-      });
+      map.flyTo([selected.lat, selected.lon], ADDRESS_ZOOM, { duration: 1.2 });
     }
   }, [selected, map]);
-
   return null;
 }
 
-export default function MapView({ selected }: MapViewProps) {
+// Capture les clics sur la carte pour identifier la parcelle.
+function ClickHandler({ onMapClick }: { onMapClick: MapViewProps["onMapClick"] }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+export default function MapView({ selected, parcelle, onMapClick }: MapViewProps) {
+  // Convertit les anneaux GeoJSON [lon,lat] en positions Leaflet [lat,lon].
+  const polygonPositions = useMemo(() => {
+    if (!parcelle) return null;
+    return parcelle.rings.map((ring) =>
+      ring.map(([lon, lat]) => [lat, lon] as [number, number]),
+    );
+  }, [parcelle]);
+
   return (
     <MapContainer
       center={DEFAULT_VIEW.center}
@@ -98,6 +116,19 @@ export default function MapView({ selected }: MapViewProps) {
         </Marker>
       )}
 
+      {polygonPositions && (
+        <Polygon
+          positions={polygonPositions}
+          pathOptions={{
+            color: "#1b6ec2",
+            weight: 2,
+            fillColor: "#1b6ec2",
+            fillOpacity: 0.25,
+          }}
+        />
+      )}
+
+      <ClickHandler onMapClick={onMapClick} />
       <FlyToSelection selected={selected} />
     </MapContainer>
   );
