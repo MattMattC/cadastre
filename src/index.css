@@ -1,0 +1,44 @@
+:root {
+  --color-bg: #0f1c2e;
+  --color-panel: #ffffff;
+  --color-accent: #1b6ec2;
+  --color-accent-dark: #1b3a5b;
+  --color-text: #1a2230;
+  --color-muted: #6b7686;
+  --color-border: #dde3ec;
+  --shadow: 0 6px 24px rgba(15, 28, 46, 0.18);
+  --radius: 12px;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  color: var(--color-text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Évite le zoom involontaire sur iOS quand on focus un input < 16px. */
+input,
+button,
+select {
+  font-size: 16px;
+}
