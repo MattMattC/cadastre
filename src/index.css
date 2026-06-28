@@ -42,3 +42,11 @@ button,
 select {
   font-size: 16px;
 }
+
+.route-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-muted);
+}

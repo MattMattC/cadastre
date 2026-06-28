@@ -1,28 +1,39 @@
 import { useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Polygon, useMap } from "react-leaflet";
 import L from "leaflet";
-import { BASE_LAYERS, CADASTRE_OVERLAY } from "../../config";
-import type { EditorBaseLayer, Parcelle } from "../../types";
+import { BASE_LAYERS, CADASTRE_OVERLAY, VECTOR_STYLES } from "../../config";
+import VectorBaseLayer from "./VectorBaseLayer";
+import type { EditorBaseLayer, Parcelle, SavedView } from "../../types";
 
 interface Props {
   parcelle: Parcelle;
   baseLayer: EditorBaseLayer;
   showCadastre: boolean;
+  initialView?: SavedView;
+  onMap: (map: L.Map) => void;
 }
 
-// Verrouille la carte (aucune interaction) et cadre sur la parcelle.
-function LockAndFit({ bounds }: { bounds: Parcelle["bounds"] }) {
+// Récupère l'instance Leaflet, cadre sur la parcelle et notifie le parent.
+function MapBridge({
+  bounds,
+  initialView,
+  onMap,
+}: {
+  bounds: Parcelle["bounds"];
+  initialView?: SavedView;
+  onMap: (map: L.Map) => void;
+}) {
   const map = useMap();
 
   useEffect(() => {
-    map.dragging.disable();
-    map.touchZoom.disable();
-    map.doubleClickZoom.disable();
-    map.scrollWheelZoom.disable();
-    map.boxZoom.disable();
-    map.keyboard.disable();
-    map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40] });
-  }, [map, bounds]);
+    if (initialView) {
+      map.setView(initialView.center, initialView.zoom);
+    } else {
+      // Cadrage serré pour que la parcelle remplisse la fenêtre.
+      map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [24, 24] });
+    }
+    onMap(map);
+  }, [map, bounds, initialView, onMap]);
 
   return null;
 }
@@ -31,9 +42,9 @@ export default function EditorBackgroundMap({
   parcelle,
   baseLayer,
   showCadastre,
+  initialView,
+  onMap,
 }: Props) {
-  const layer = BASE_LAYERS[baseLayer];
-
   const polygonPositions = useMemo(
     () =>
       parcelle.rings.map((ring) =>
@@ -51,16 +62,28 @@ export default function EditorBackgroundMap({
     <MapContainer
       center={center}
       zoom={18}
+      minZoom={5}
+      maxZoom={22}
       zoomControl={false}
       attributionControl={false}
-      // `crossOrigin` permet l'export d'image sans canvas « tainted ».
+      zoomSnap={0.25}
       style={{ height: "100%", width: "100%" }}
     >
-      <TileLayer url={layer.url} maxZoom={layer.maxZoom} crossOrigin="anonymous" />
+      {baseLayer === "ignPlan" ? (
+        <VectorBaseLayer styleUrl={VECTOR_STYLES.ignPlan} />
+      ) : (
+        <TileLayer
+          url={BASE_LAYERS.ignPhoto.url}
+          maxZoom={22}
+          maxNativeZoom={20}
+          crossOrigin="anonymous"
+        />
+      )}
       {showCadastre && (
         <TileLayer
           url={CADASTRE_OVERLAY.url}
-          maxZoom={CADASTRE_OVERLAY.maxZoom}
+          maxZoom={22}
+          maxNativeZoom={19}
           crossOrigin="anonymous"
         />
       )}
@@ -70,10 +93,10 @@ export default function EditorBackgroundMap({
           color: "#d62828",
           weight: 2,
           fillColor: "#d62828",
-          fillOpacity: 0.08,
+          fillOpacity: 0.06,
         }}
       />
-      <LockAndFit bounds={parcelle.bounds} />
+      <MapBridge bounds={parcelle.bounds} initialView={initialView} onMap={onMap} />
     </MapContainer>
   );
 }

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { toPng } from "html-to-image";
 import type Konva from "konva";
+import type { Map as LeafletMap } from "leaflet";
 import EditorBackgroundMap from "../components/editor/EditorBackgroundMap";
 import AnnotationCanvas from "../components/editor/AnnotationCanvas";
 import Toolbar from "../components/editor/Toolbar";
@@ -15,17 +16,22 @@ import {
 import type {
   AnnotationProject,
   EditorBaseLayer,
+  LatLng,
   Shape,
   ToolKind,
 } from "../types";
 import "./EditorPage.css";
+
+interface Pt {
+  x: number;
+  y: number;
+}
 
 export default function EditorPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectParam = searchParams.get("project");
 
-  // Source initiale : projet existant (réédition) ou parcelle en attente.
   const initialProject = useMemo<AnnotationProject | null>(
     () => (projectParam ? getProject(projectParam) : null),
     [projectParam],
@@ -57,9 +63,30 @@ export default function EditorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [mapReady, setMapReady] = useState(false);
+  // Incrémenté à chaque déplacement/zoom pour reprojeter les annotations.
+  const [, setViewVersion] = useState(0);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+
+  const handleMap = useCallback((map: LeafletMap) => {
+    mapRef.current = map;
+    const bump = () => setViewVersion((v) => v + 1);
+    map.on("move zoom viewreset zoomanim", bump);
+    setMapReady(true);
+  }, []);
+
+  const project = useCallback((ll: LatLng): Pt => {
+    const p = mapRef.current!.latLngToContainerPoint(ll);
+    return { x: p.x, y: p.y };
+  }, []);
+
+  const unproject = useCallback((p: Pt): LatLng => {
+    const ll = mapRef.current!.containerPointToLatLng([p.x, p.y]);
+    return [ll.lat, ll.lng];
+  }, []);
 
   // Mesure la zone de dessin (responsive).
   useEffect(() => {
@@ -73,7 +100,6 @@ export default function EditorPage() {
     return () => observer.disconnect();
   }, []);
 
-  // Raccourcis clavier : suppression et annulation.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
@@ -134,7 +160,8 @@ export default function EditorPage() {
 
   function persist(id: string, name: string) {
     const now = Date.now();
-    const project: AnnotationProject = {
+    const map = mapRef.current;
+    const projectData: AnnotationProject = {
       id,
       name,
       createdAt: initialProject?.createdAt ?? now,
@@ -143,8 +170,14 @@ export default function EditorPage() {
       baseLayer,
       showCadastre,
       shapes,
+      view: map
+        ? {
+            center: [map.getCenter().lat, map.getCenter().lng],
+            zoom: map.getZoom(),
+          }
+        : undefined,
     };
-    saveProject(project);
+    saveProject(projectData);
     setProjectId(id);
     setProjectName(name);
     setSearchParams({ project: id }, { replace: true });
@@ -173,7 +206,6 @@ export default function EditorPage() {
     const el = wrapperRef.current;
     if (!el) return;
     setSelectedId(null);
-    // Laisse le temps au Transformer de se détacher avant la capture.
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     try {
       const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true });
@@ -193,6 +225,8 @@ export default function EditorPage() {
   if (!initialParcelle) {
     return <Navigate to="/" replace />;
   }
+
+  const panMode = tool === "pan";
 
   return (
     <div className="editor">
@@ -214,6 +248,13 @@ export default function EditorPage() {
         hasSelection={selectedId !== null}
         onDeleteSelected={deleteSelected}
         onClear={clearAll}
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+        onFit={() =>
+          mapRef.current?.fitBounds(initialParcelle.bounds, {
+            padding: [24, 24],
+          })
+        }
         onSave={save}
         onSaveAs={saveAs}
         onExport={exportPng}
@@ -226,10 +267,12 @@ export default function EditorPage() {
             parcelle={initialParcelle}
             baseLayer={baseLayer}
             showCadastre={showCadastre}
+            initialView={initialProject?.view}
+            onMap={handleMap}
           />
         </div>
-        <div className="editor__draw">
-          {size.width > 0 && (
+        <div className={"editor__draw" + (panMode ? " editor__draw--pan" : "")}>
+          {mapReady && size.width > 0 && (
             <AnnotationCanvas
               width={size.width}
               height={size.height}
@@ -240,6 +283,8 @@ export default function EditorPage() {
               currentSymbol={currentSymbol}
               selectedId={selectedId}
               stageRef={stageRef}
+              project={project}
+              unproject={unproject}
               onSelect={setSelectedId}
               onAddShape={addShape}
               onUpdateShape={updateShape}

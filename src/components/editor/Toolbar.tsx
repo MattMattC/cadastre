@@ -20,6 +20,9 @@ interface Props {
   hasSelection: boolean;
   onDeleteSelected: () => void;
   onClear: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFit: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onExport: () => void;
@@ -28,6 +31,7 @@ interface Props {
 
 const TOOLS: { kind: ToolKind; icon: string; label: string }[] = [
   { kind: "select", icon: "↖", label: "Sélection" },
+  { kind: "pan", icon: "✋", label: "Déplacer la carte" },
   { kind: "pen", icon: "✎", label: "Crayon" },
   { kind: "line", icon: "／", label: "Trait" },
   { kind: "arrow", icon: "➜", label: "Flèche" },
@@ -140,6 +144,33 @@ export default function Toolbar(props: Props) {
           />
           Cadastre
         </label>
+      </div>
+
+      <div className="toolbar__group">
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={props.onZoomOut}
+          title="Dézoomer"
+        >
+          －
+        </button>
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={props.onZoomIn}
+          title="Zoomer"
+        >
+          ＋
+        </button>
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={props.onFit}
+          title="Recadrer sur la parcelle"
+        >
+          ⤢
+        </button>
       </div>
 
       <div className="toolbar__group">

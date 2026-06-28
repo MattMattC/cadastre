@@ -38,6 +38,12 @@ export const BASE_LAYERS = {
 
 export type BaseLayerKey = keyof typeof BASE_LAYERS;
 
+// Styles de tuiles vectorielles IGN (nets à n'importe quel zoom).
+export const VECTOR_STYLES = {
+  ignPlan:
+    "https://data.geopf.fr/annexes/ressources/vectorTiles/styles/PLAN.IGN/standard.json",
+} as const;
+
 // Couche cadastre superposable (overlay raster WMTS, Parcellaire Express).
 export const CADASTRE_OVERLAY = {
   label: "Cadastre (parcelles)",

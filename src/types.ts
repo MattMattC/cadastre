@@ -36,9 +36,10 @@ export interface Parcelle {
 // Fonds de carte utilisables comme arrière-plan de l'éditeur.
 export type EditorBaseLayer = "ignPlan" | "ignPhoto";
 
-// Un outil de dessin.
+// Un outil de dessin (« select » et « pan » ne créent pas de forme).
 export type ToolKind =
   | "select"
+  | "pan"
   | "pen"
   | "line"
   | "arrow"
@@ -47,23 +48,33 @@ export type ToolKind =
   | "text"
   | "symbol";
 
-// Une forme dessinée dans l'éditeur (espace pixel du canvas).
+// Coordonnée géographique [latitude, longitude].
+export type LatLng = [number, number];
+
+// Type de forme effectivement dessinable.
+export type ShapeType = Exclude<ToolKind, "select" | "pan">;
+
+// Une forme dessinée, ancrée en coordonnées géographiques pour suivre
+// le zoom/déplacement de la carte. L'épaisseur et la taille de police
+// restent en pixels écran (lisibilité constante).
 export interface Shape {
   id: string;
-  type: Exclude<ToolKind, "select">;
+  type: ShapeType;
   color: string;
   strokeWidth: number;
-  // Tracés (pen / line / arrow) : liste de points [x1,y1,x2,y2,...].
-  points?: number[];
-  // Formes positionnées (rect / ellipse / text / symbol).
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  // Contenu pour text / symbol.
+  // pen / line / arrow : liste de sommets ; rect / ellipse : 2 coins opposés.
+  latlngs?: LatLng[];
+  // text / symbol : position d'ancrage.
+  latlng?: LatLng;
   text?: string;
   fontSize?: number;
   rotation?: number;
+}
+
+// Vue carte sauvegardée pour restaurer le cadrage.
+export interface SavedView {
+  center: LatLng;
+  zoom: number;
 }
 
 // Un projet d'annotation sauvegardé (rééditable).
@@ -76,4 +87,5 @@ export interface AnnotationProject {
   baseLayer: EditorBaseLayer;
   showCadastre: boolean;
   shapes: Shape[];
+  view?: SavedView;
 }
