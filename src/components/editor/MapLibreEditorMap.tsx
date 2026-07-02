@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import type {
   Map as MaplibreMap,
-  MapOptions,
   StyleSpecification,
   LngLatBoundsLike,
 } from "maplibre-gl";
@@ -109,21 +108,20 @@ export default function MapLibreEditorMap({
   // Création unique de la carte.
   useEffect(() => {
     if (!containerRef.current) return;
-    // preserveDrawingBuffer est valide au runtime (capture du canvas WebGL
-    // pour l'export) mais absent de certains typings → on contourne via objet.
-    const options = {
+    const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleFor(baseLayer),
       center: [
         (parcelle.bounds[0][1] + parcelle.bounds[1][1]) / 2,
         (parcelle.bounds[0][0] + parcelle.bounds[1][0]) / 2,
-      ] as [number, number],
+      ],
       zoom: 17,
       maxZoom: 24,
       attributionControl: false,
-      preserveDrawingBuffer: true,
-    };
-    const map = new maplibregl.Map(options as unknown as MapOptions);
+      // MapLibre v5 : préserver le buffer WebGL pour pouvoir capturer le
+      // canvas lors de l'export PNG (sinon le fond ressort vide).
+      canvasContextAttributes: { preserveDrawingBuffer: true },
+    });
     mapRef.current = map;
 
     map.on("style.load", () => addOverlays(map));
