@@ -53,7 +53,11 @@ export default function EditorControls(props: Props) {
             key={t.kind}
             type="button"
             className={"fab" + (props.tool === t.kind ? " fab--active" : "")}
-            onClick={() => props.setTool(t.kind)}
+            onClick={() =>
+              props.setTool(
+                props.tool === t.kind && t.kind !== "select" ? "select" : t.kind,
+              )
+            }
             title={t.label}
             aria-label={t.label}
           >
