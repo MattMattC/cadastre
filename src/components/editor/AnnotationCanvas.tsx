@@ -136,6 +136,8 @@ export default function AnnotationCanvas({
 }: Props) {
   const [draft, setDraft] = useState<Shape | null>(null);
   const drawing = useRef(false);
+  // Horodatage du dernier touchstart, pour filtrer le mousedown fantôme.
+  const lastTouch = useRef(0);
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Map<string, Konva.Node>>(new Map());
 
@@ -161,6 +163,14 @@ export default function AnnotationCanvas({
   }
 
   function handleDown(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
+    // Sur tactile, un tap émet touchstart PUIS un mousedown « fantôme ».
+    // On ignore ce mousedown émulé pour éviter les doublons (ex. symbole ×2).
+    if (e.evt.type === "touchstart") {
+      lastTouch.current = Date.now();
+    } else if (Date.now() - lastTouch.current < 700) {
+      return;
+    }
+
     const pos = pointer();
     if (!pos) return;
 
