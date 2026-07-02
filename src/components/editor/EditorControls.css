@@ -1,0 +1,215 @@
+/* Conteneurs flottants au-dessus de la carte. */
+.ec {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  pointer-events: auto;
+}
+
+/* Bouton flottant générique. */
+.fab {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #1f2d3d;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition:
+    transform 0.05s ease,
+    background 0.15s ease;
+}
+
+.fab:hover:not(:disabled) {
+  background: #f0f3f7;
+}
+
+.fab:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.fab--active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.fab--primary {
+  background: #2a9d8f;
+  color: #fff;
+  font-weight: 700;
+}
+
+.fab--primary:hover {
+  background: #248277;
+}
+
+.fab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Outils de dessin : pile verticale à gauche, centrée. */
+.ec--tools {
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Navigation carte : pile verticale à droite, centrée. */
+.ec--nav {
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Actions : pile verticale en bas à droite. */
+.ec--actions {
+  right: 12px;
+  bottom: 12px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Panneau style : en haut à gauche. */
+.ec--style {
+  left: 12px;
+  top: 12px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  max-width: 220px;
+}
+
+.ec__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ec__swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ec__swatch--active {
+  border-color: var(--color-accent);
+  transform: scale(1.12);
+}
+
+.ec__color {
+  width: 28px;
+  height: 26px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ec__stroke {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ec__stroke input[type="range"] {
+  flex: 1;
+}
+
+.ec__stroke-val {
+  font-size: 12px;
+  min-width: 34px;
+  text-align: right;
+  color: #333;
+}
+
+/* Palette symboles : sous le panneau style, à gauche. */
+.ec--symbols {
+  left: 12px;
+  top: 128px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  width: 220px;
+  max-height: 44vh;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  -webkit-overflow-scrolling: touch;
+}
+
+.ec__symbol {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  background: #fff;
+  color: #d62828;
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.ec__symbol--active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.ec__symbol-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ec__symbol-text {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.05;
+  text-align: center;
+}
+
+/* Sur petits écrans, on resserre un peu. */
+@media (max-width: 720px) {
+  .fab {
+    width: 42px;
+    height: 42px;
+    font-size: 17px;
+  }
+
+  .ec--tools,
+  .ec--nav {
+    gap: 6px;
+  }
+
+  .ec--style,
+  .ec--symbols {
+    max-width: 176px;
+    width: auto;
+  }
+
+  .ec--symbols {
+    width: 176px;
+  }
+}

@@ -5,6 +5,7 @@ import type { Map as MaplibreMap } from "maplibre-gl";
 import MapLibreEditorMap from "../components/editor/MapLibreEditorMap";
 import AnnotationCanvas from "../components/editor/AnnotationCanvas";
 import Toolbar from "../components/editor/Toolbar";
+import EditorControls from "../components/editor/EditorControls";
 import { SYMBOLS } from "../components/editor/symbols";
 import {
   getPendingParcelle,
@@ -267,40 +268,10 @@ export default function EditorPage() {
   return (
     <div className="editor">
       <Toolbar
-        tool={tool}
-        setTool={setTool}
-        color={color}
-        setColor={setColor}
-        strokeWidth={strokeWidth}
-        setStrokeWidth={setStrokeWidth}
-        currentSymbol={currentSymbol}
-        setCurrentSymbol={setCurrentSymbol}
         baseLayer={baseLayer}
         setBaseLayer={setBaseLayer}
         showCadastre={showCadastre}
         setShowCadastre={setShowCadastre}
-        canUndo={past.length > 0}
-        onUndo={undo}
-        hasSelection={selectedId !== null}
-        onDeleteSelected={deleteSelected}
-        onClear={clearAll}
-        onZoomIn={() => mapRef.current?.zoomIn()}
-        onZoomOut={() => mapRef.current?.zoomOut()}
-        onFit={() => mapRef.current?.fitBounds(parcelleBounds(), { padding: 30 })}
-        onRotateLeft={() =>
-          mapRef.current?.easeTo({
-            bearing: (mapRef.current?.getBearing() ?? 0) - 15,
-          })
-        }
-        onRotateRight={() =>
-          mapRef.current?.easeTo({
-            bearing: (mapRef.current?.getBearing() ?? 0) + 15,
-          })
-        }
-        onResetNorth={() => mapRef.current?.easeTo({ bearing: 0 })}
-        onSave={save}
-        onSaveAs={saveAs}
-        onExport={exportPng}
         onBack={() => navigate("/")}
       />
 
@@ -334,6 +305,39 @@ export default function EditorPage() {
             />
           )}
         </div>
+
+        <EditorControls
+          tool={tool}
+          setTool={setTool}
+          color={color}
+          setColor={setColor}
+          strokeWidth={strokeWidth}
+          setStrokeWidth={setStrokeWidth}
+          currentSymbol={currentSymbol}
+          setCurrentSymbol={setCurrentSymbol}
+          canUndo={past.length > 0}
+          onUndo={undo}
+          hasSelection={selectedId !== null}
+          onDeleteSelected={deleteSelected}
+          onClear={clearAll}
+          onZoomIn={() => mapRef.current?.zoomIn()}
+          onZoomOut={() => mapRef.current?.zoomOut()}
+          onFit={() => mapRef.current?.fitBounds(parcelleBounds(), { padding: 30 })}
+          onRotateLeft={() =>
+            mapRef.current?.easeTo({
+              bearing: (mapRef.current?.getBearing() ?? 0) - 15,
+            })
+          }
+          onRotateRight={() =>
+            mapRef.current?.easeTo({
+              bearing: (mapRef.current?.getBearing() ?? 0) + 15,
+            })
+          }
+          onResetNorth={() => mapRef.current?.easeTo({ bearing: 0 })}
+          onSave={save}
+          onSaveAs={saveAs}
+          onExport={exportPng}
+        />
       </div>
 
       {toast && <div className="editor__toast">{toast}</div>}
