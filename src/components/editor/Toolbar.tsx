@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { EditorBaseLayer, ToolKind } from "../../types";
 import { SYMBOLS, svgToDataUrl } from "./symbols";
+import LegendPanel from "./LegendPanel";
 import "./Toolbar.css";
 
 interface Props {
@@ -47,8 +49,10 @@ const TOOLS: { kind: ToolKind; icon: string; label: string }[] = [
 const COLORS = ["#d62828", "#1b6ec2", "#2a9d8f", "#e9c46a", "#000000", "#ffffff"];
 
 export default function Toolbar(props: Props) {
+  const [legendOpen, setLegendOpen] = useState(false);
   return (
     <div className="toolbar">
+      {legendOpen && <LegendPanel onClose={() => setLegendOpen(false)} />}
       <div className="toolbar__group">
         <button
           type="button"
@@ -57,6 +61,14 @@ export default function Toolbar(props: Props) {
           title="Retour à la carte"
         >
           ‹ Carte
+        </button>
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={() => setLegendOpen(true)}
+          title="Légende des symboles"
+        >
+          ☰ Légende
         </button>
       </div>
 
