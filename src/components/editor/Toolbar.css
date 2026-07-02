@@ -66,21 +66,46 @@
 
 .toolbar__symbols {
   flex-wrap: wrap;
-  max-width: 320px;
+  max-width: 380px;
+  max-height: 132px;
+  overflow-y: auto;
 }
 
 .toolbar__symbol {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border: none;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  color: #d62828;
   font-size: 18px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  overflow: hidden;
+}
+
+.toolbar__symbol-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.toolbar__symbol-text {
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .toolbar__symbol--active {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .toolbar__swatch {

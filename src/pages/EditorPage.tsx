@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { toPng } from "html-to-image";
 import type Konva from "konva";
-import type { Map as LeafletMap } from "leaflet";
-import EditorBackgroundMap from "../components/editor/EditorBackgroundMap";
+import type { Map as MaplibreMap } from "maplibre-gl";
+import MapLibreEditorMap from "../components/editor/MapLibreEditorMap";
 import AnnotationCanvas from "../components/editor/AnnotationCanvas";
 import Toolbar from "../components/editor/Toolbar";
 import { SYMBOLS } from "../components/editor/symbols";
@@ -59,7 +58,7 @@ export default function EditorPage() {
   const [tool, setTool] = useState<ToolKind>("pen");
   const [color, setColor] = useState("#d62828");
   const [strokeWidth, setStrokeWidth] = useState(4);
-  const [currentSymbol, setCurrentSymbol] = useState(SYMBOLS[0].char);
+  const [currentSymbol, setCurrentSymbol] = useState(SYMBOLS[0].id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -69,24 +68,32 @@ export default function EditorPage() {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
+  const mapRef = useRef<MaplibreMap | null>(null);
 
-  const handleMap = useCallback((map: LeafletMap) => {
+  const handleMap = useCallback((map: MaplibreMap) => {
     mapRef.current = map;
-    const bump = () => setViewVersion((v) => v + 1);
-    map.on("move zoom viewreset zoomanim", bump);
+    // 'move' couvre déplacement, zoom et rotation (bearing).
+    map.on("move", () => setViewVersion((v) => v + 1));
     setMapReady(true);
   }, []);
 
   const project = useCallback((ll: LatLng): Pt => {
-    const p = mapRef.current!.latLngToContainerPoint(ll);
+    const p = mapRef.current!.project([ll[1], ll[0]]);
     return { x: p.x, y: p.y };
   }, []);
 
   const unproject = useCallback((p: Pt): LatLng => {
-    const ll = mapRef.current!.containerPointToLatLng([p.x, p.y]);
+    const ll = mapRef.current!.unproject([p.x, p.y]);
     return [ll.lat, ll.lng];
   }, []);
+
+  function parcelleBounds(): [[number, number], [number, number]] {
+    const b = initialParcelle!.bounds;
+    return [
+      [b[0][1], b[0][0]],
+      [b[1][1], b[1][0]],
+    ];
+  }
 
   // Mesure la zone de dessin (responsive).
   useEffect(() => {
@@ -174,6 +181,7 @@ export default function EditorPage() {
         ? {
             center: [map.getCenter().lat, map.getCenter().lng],
             zoom: map.getZoom(),
+            bearing: map.getBearing(),
           }
         : undefined,
     };
@@ -203,18 +211,46 @@ export default function EditorPage() {
   }
 
   async function exportPng() {
-    const el = wrapperRef.current;
-    if (!el) return;
+    const stage = stageRef.current;
+    const map = mapRef.current;
+    if (!stage || !map) return;
     setSelectedId(null);
+
+    // Force un rendu frais de la carte puis attend la frame suivante.
+    await new Promise<void>((resolve) => {
+      map.once("idle", () => resolve());
+      map.triggerRepaint();
+      // Filet de sécurité si 'idle' ne se déclenche pas.
+      window.setTimeout(() => resolve(), 600);
+    });
     await new Promise((r) => requestAnimationFrame(() => r(null)));
+
     try {
-      const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true });
+      const ratio = 2;
+      const W = Math.round(size.width);
+      const H = Math.round(size.height);
+      const out = document.createElement("canvas");
+      out.width = W * ratio;
+      out.height = H * ratio;
+      const ctx = out.getContext("2d");
+      if (!ctx) throw new Error("no 2d context");
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, out.width, out.height);
+
+      // 1. Fond complet (base + cadastre + contour) : un seul canvas WebGL.
+      ctx.drawImage(map.getCanvas(), 0, 0, out.width, out.height);
+
+      // 2. Annotations Konva par-dessus.
+      const konvaCanvas = stage.toCanvas({ pixelRatio: ratio });
+      ctx.drawImage(konvaCanvas, 0, 0, out.width, out.height);
+
       const link = document.createElement("a");
       link.download =
         (projectName ||
           `parcelle-${initialParcelle!.section}-${initialParcelle!.numero}`) +
         ".png";
-      link.href = dataUrl;
+      link.href = out.toDataURL("image/png");
       link.click();
       showToast("Image exportée.");
     } catch {
@@ -250,11 +286,18 @@ export default function EditorPage() {
         onClear={clearAll}
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
-        onFit={() =>
-          mapRef.current?.fitBounds(initialParcelle.bounds, {
-            padding: [24, 24],
+        onFit={() => mapRef.current?.fitBounds(parcelleBounds(), { padding: 30 })}
+        onRotateLeft={() =>
+          mapRef.current?.easeTo({
+            bearing: (mapRef.current?.getBearing() ?? 0) - 15,
           })
         }
+        onRotateRight={() =>
+          mapRef.current?.easeTo({
+            bearing: (mapRef.current?.getBearing() ?? 0) + 15,
+          })
+        }
+        onResetNorth={() => mapRef.current?.easeTo({ bearing: 0 })}
         onSave={save}
         onSaveAs={saveAs}
         onExport={exportPng}
@@ -263,7 +306,7 @@ export default function EditorPage() {
 
       <div className="editor__stage" ref={wrapperRef}>
         <div className="editor__bg">
-          <EditorBackgroundMap
+          <MapLibreEditorMap
             parcelle={initialParcelle}
             baseLayer={baseLayer}
             showCadastre={showCadastre}

@@ -8,15 +8,94 @@ import {
   Rect,
   Ellipse,
   Text,
+  Image as KonvaImage,
   Transformer,
 } from "react-konva";
 import Konva from "konva";
 import type { LatLng, Shape, ShapeType, ToolKind } from "../../types";
 import { newId } from "../../store/projects";
+import { getSymbol, svgToDataUrl } from "./symbols";
 
 interface Pt {
   x: number;
   y: number;
+}
+
+// Charge un SVG (data URL) dans un élément Image pour Konva.
+function useSvgImage(svg: string): HTMLImageElement | null {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    const image = new window.Image();
+    image.onload = () => setImg(image);
+    image.src = svgToDataUrl(svg);
+    return () => {
+      image.onload = null;
+    };
+  }, [svg]);
+  return img;
+}
+
+interface SymbolImageProps {
+  shape: Shape;
+  svg: string;
+  x: number;
+  y: number;
+  size: number;
+  draggable: boolean;
+  refCb: (node: Konva.Node | null) => void;
+  onSelect: () => void;
+  unproject: (p: Pt) => LatLng;
+  onUpdateShape: (id: string, patch: Partial<Shape>) => void;
+}
+
+// Pictogramme SVG rendu comme image, ancré (et centré) sur sa position géo.
+function SymbolImage({
+  shape,
+  svg,
+  x,
+  y,
+  size,
+  draggable,
+  refCb,
+  onSelect,
+  unproject,
+  onUpdateShape,
+}: SymbolImageProps) {
+  const img = useSvgImage(svg);
+  if (!img) return null;
+  return (
+    <KonvaImage
+      ref={refCb}
+      image={img}
+      x={x}
+      y={y}
+      width={size}
+      height={size}
+      offsetX={size / 2}
+      offsetY={size / 2}
+      rotation={shape.rotation}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragEnd={(e) => {
+        const node = e.target;
+        onUpdateShape(shape.id, {
+          latlng: unproject({ x: node.x(), y: node.y() }),
+        });
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const sx = node.scaleX();
+        node.scaleX(1);
+        node.scaleY(1);
+        onUpdateShape(shape.id, {
+          latlng: unproject({ x: node.x(), y: node.y() }),
+          size: Math.max(10, size * sx),
+          rotation: node.rotation(),
+        });
+      }}
+    />
+  );
 }
 
 interface Props {
@@ -109,15 +188,29 @@ export default function AnnotationCanvas({
     }
 
     if (tool === "symbol") {
-      onAddShape({
-        id: newId(),
-        type: "symbol",
-        latlng: ll,
-        text: currentSymbol,
-        fontSize: 24 + strokeWidth * 4,
-        color,
-        strokeWidth,
-      });
+      const def = getSymbol(currentSymbol);
+      if (def?.kind === "svg" && def.svg) {
+        onAddShape({
+          id: newId(),
+          type: "symbol",
+          latlng: ll,
+          symbolId: def.id,
+          size: 30 + strokeWidth * 4,
+          color: def.color ?? color,
+          strokeWidth,
+        });
+      } else {
+        onAddShape({
+          id: newId(),
+          type: "symbol",
+          latlng: ll,
+          symbolId: def?.id,
+          text: def?.text ?? currentSymbol,
+          fontSize: 22 + strokeWidth * 4,
+          color: def?.color ?? color,
+          strokeWidth,
+        });
+      }
       return;
     }
 
@@ -323,6 +416,24 @@ export default function AnnotationCanvas({
 
     // text / symbol
     const p = project(shape.latlng!);
+    const def = shape.symbolId ? getSymbol(shape.symbolId) : undefined;
+    if (shape.type === "symbol" && def?.kind === "svg" && def.svg) {
+      return (
+        <SymbolImage
+          key={shape.id}
+          shape={shape}
+          svg={def.svg}
+          x={p.x}
+          y={p.y}
+          size={shape.size ?? 32}
+          draggable={draggable}
+          refCb={isDraft ? () => {} : registerRef(shape.id)}
+          onSelect={() => tool === "select" && onSelect(shape.id)}
+          unproject={unproject}
+          onUpdateShape={onUpdateShape}
+        />
+      );
+    }
     return (
       <Text
         key={shape.id}

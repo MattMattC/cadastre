@@ -1,5 +1,5 @@
 import type { EditorBaseLayer, ToolKind } from "../../types";
-import { SYMBOLS } from "./symbols";
+import { SYMBOLS, svgToDataUrl } from "./symbols";
 import "./Toolbar.css";
 
 interface Props {
@@ -23,6 +23,9 @@ interface Props {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
+  onRotateLeft: () => void;
+  onRotateRight: () => void;
+  onResetNorth: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onExport: () => void;
@@ -77,16 +80,26 @@ export default function Toolbar(props: Props) {
         <div className="toolbar__group toolbar__symbols">
           {SYMBOLS.map((s) => (
             <button
-              key={s.char}
+              key={s.id}
               type="button"
               className={
                 "toolbar__symbol" +
-                (props.currentSymbol === s.char ? " toolbar__symbol--active" : "")
+                (props.currentSymbol === s.id ? " toolbar__symbol--active" : "")
               }
-              onClick={() => props.setCurrentSymbol(s.char)}
+              onClick={() => props.setCurrentSymbol(s.id)}
               title={s.label}
             >
-              {s.char}
+              {s.kind === "svg" && s.svg ? (
+                <img
+                  src={svgToDataUrl(s.svg)}
+                  alt={s.label}
+                  className="toolbar__symbol-img"
+                />
+              ) : s.kind === "text" ? (
+                <span className="toolbar__symbol-text">{s.text}</span>
+              ) : (
+                s.text
+              )}
             </button>
           ))}
         </div>
@@ -170,6 +183,33 @@ export default function Toolbar(props: Props) {
           title="Recadrer sur la parcelle"
         >
           ⤢
+        </button>
+      </div>
+
+      <div className="toolbar__group">
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={props.onRotateLeft}
+          title="Pivoter à gauche"
+        >
+          ⟲
+        </button>
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={props.onRotateRight}
+          title="Pivoter à droite"
+        >
+          ⟳
+        </button>
+        <button
+          type="button"
+          className="toolbar__btn"
+          onClick={props.onResetNorth}
+          title="Remettre au nord"
+        >
+          ⬆N
         </button>
       </div>
 

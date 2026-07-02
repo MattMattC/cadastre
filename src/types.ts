@@ -69,12 +69,16 @@ export interface Shape {
   text?: string;
   fontSize?: number;
   rotation?: number;
+  // symbol : identifiant du pictogramme (voir SYMBOLS) et taille écran en px.
+  symbolId?: string;
+  size?: number;
 }
 
 // Vue carte sauvegardée pour restaurer le cadrage.
 export interface SavedView {
   center: LatLng;
   zoom: number;
+  bearing?: number;
 }
 
 // Un projet d'annotation sauvegardé (rééditable).
