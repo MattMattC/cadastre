@@ -1,0 +1,74 @@
+/* Monté dans <body> (portal) : doit couvrir toute l'UI, y compris la
+   barre d'outils du haut (z-index 1200) et les boutons flottants. */
+.inline-text {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  pointer-events: auto;
+}
+
+/* Barre fixe en haut (reste visible avec le clavier). */
+.inline-text__bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3001;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+}
+
+.inline-text__bar-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.inline-text__bar-btn {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.inline-text__bar-btn--done {
+  font-weight: 700;
+  color: #7dd3fc;
+}
+
+/* Champ directement sur la carte, sans cadre. */
+.inline-text__field {
+  position: absolute;
+  margin: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  min-width: 48px;
+  max-width: min(88vw, 520px);
+  padding: 2px 4px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-family: inherit;
+  caret-color: currentColor;
+  /* Lisibilité sur fond carte (contour blanc + ombre). */
+  text-shadow:
+    -1px -1px 0 rgba(255, 255, 255, 0.95),
+    1px -1px 0 rgba(255, 255, 255, 0.95),
+    -1px 1px 0 rgba(255, 255, 255, 0.95),
+    1px 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.inline-text__field::placeholder {
+  color: inherit;
+  opacity: 0.55;
+}

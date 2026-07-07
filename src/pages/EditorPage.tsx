@@ -8,15 +8,17 @@ import Toolbar from "../components/editor/Toolbar";
 import EditorControls from "../components/editor/EditorControls";
 import { SYMBOLS } from "../components/editor/symbols";
 import {
-  getPendingParcelle,
+  getPendingParcelles,
   getProject,
   newId,
+  projectParcelles,
   saveProject,
 } from "../store/projects";
 import type {
   AnnotationProject,
   EditorBaseLayer,
   LatLng,
+  Parcelle,
   Shape,
   ToolKind,
 } from "../types";
@@ -36,10 +38,10 @@ export default function EditorPage() {
     () => (projectParam ? getProject(projectParam) : null),
     [projectParam],
   );
-  const initialParcelle = useMemo(
-    () => initialProject?.parcelle ?? getPendingParcelle(),
-    [initialProject],
-  );
+  const initialParcelles = useMemo<Parcelle[]>(() => {
+    if (initialProject) return projectParcelles(initialProject);
+    return getPendingParcelles();
+  }, [initialProject]);
 
   const [projectId, setProjectId] = useState<string | null>(
     initialProject?.id ?? null,
@@ -56,11 +58,16 @@ export default function EditorPage() {
 
   const [shapes, setShapes] = useState<Shape[]>(initialProject?.shapes ?? []);
   const [past, setPast] = useState<Shape[][]>([]);
-  const [tool, setTool] = useState<ToolKind>("pen");
+  const [tool, setTool] = useState<ToolKind>("pan");
   const [color, setColor] = useState("#d62828");
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [currentSymbol, setCurrentSymbol] = useState(SYMBOLS[0].id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editTextRequestId, setEditTextRequestId] = useState<string | null>(null);
+  const handleEditRequestHandled = useCallback(() => setEditTextRequestId(null), []);
+  const handleEditSelectedText = useCallback(() => {
+    if (selectedId) setEditTextRequestId(selectedId);
+  }, [selectedId]);
   const [toast, setToast] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [mapReady, setMapReady] = useState(false);
@@ -88,14 +95,6 @@ export default function EditorPage() {
     return [ll.lat, ll.lng];
   }, []);
 
-  function parcelleBounds(): [[number, number], [number, number]] {
-    const b = initialParcelle!.bounds;
-    return [
-      [b[0][1], b[0][0]],
-      [b[1][1], b[1][0]],
-    ];
-  }
-
   // Mesure la zone de dessin (responsive).
   useEffect(() => {
     const el = wrapperRef.current;
@@ -118,7 +117,7 @@ export default function EditorPage() {
         undo();
       } else if (e.key === "Escape") {
         setSelectedId(null);
-        setTool("select");
+        setTool("pan");
       }
     }
     window.addEventListener("keydown", onKey);
@@ -174,7 +173,7 @@ export default function EditorPage() {
       name,
       createdAt: initialProject?.createdAt ?? now,
       updatedAt: now,
-      parcelle: initialParcelle!,
+      parcelles: initialParcelles,
       baseLayer,
       showCadastre,
       shapes,
@@ -204,7 +203,9 @@ export default function EditorPage() {
   function saveAs() {
     const suggested =
       projectName ||
-      `Parcelle ${initialParcelle!.section} ${initialParcelle!.numero}`;
+      (initialParcelles.length === 1
+        ? `Parcelle ${initialParcelles[0].section} ${initialParcelles[0].numero}`
+        : `${initialParcelles.length} parcelles`);
     const name = window.prompt("Nom du projet :", suggested);
     if (!name) return;
     persist(newId(), name);
@@ -247,10 +248,12 @@ export default function EditorPage() {
       ctx.drawImage(konvaCanvas, 0, 0, out.width, out.height);
 
       const link = document.createElement("a");
-      link.download =
-        (projectName ||
-          `parcelle-${initialParcelle!.section}-${initialParcelle!.numero}`) +
-        ".png";
+      const label =
+        projectName ||
+        (initialParcelles.length === 1
+          ? `parcelle-${initialParcelles[0].section}-${initialParcelles[0].numero}`
+          : `parcelles-${initialParcelles.length}`);
+      link.download = label + ".png";
       link.href = out.toDataURL("image/png");
       link.click();
       showToast("Image exportée.");
@@ -259,11 +262,13 @@ export default function EditorPage() {
     }
   }
 
-  if (!initialParcelle) {
+  if (initialParcelles.length === 0) {
     return <Navigate to="/" replace />;
   }
 
   const panMode = tool === "pan";
+  const selectedShape = shapes.find((s) => s.id === selectedId);
+  const canEditText = tool === "select" && selectedShape?.type === "text";
 
   return (
     <div className="editor">
@@ -278,7 +283,7 @@ export default function EditorPage() {
       <div className="editor__stage" ref={wrapperRef}>
         <div className="editor__bg">
           <MapLibreEditorMap
-            parcelle={initialParcelle}
+            parcelles={initialParcelles}
             baseLayer={baseLayer}
             showCadastre={showCadastre}
             initialView={initialProject?.view}
@@ -302,6 +307,9 @@ export default function EditorPage() {
               onSelect={setSelectedId}
               onAddShape={addShape}
               onUpdateShape={updateShape}
+              onRequestSelectTool={() => setTool("select")}
+              editRequestId={editTextRequestId}
+              onEditRequestHandled={handleEditRequestHandled}
             />
           )}
         </div>
@@ -318,11 +326,12 @@ export default function EditorPage() {
           canUndo={past.length > 0}
           onUndo={undo}
           hasSelection={selectedId !== null}
+          canEditText={canEditText}
+          onEditSelectedText={handleEditSelectedText}
           onDeleteSelected={deleteSelected}
           onClear={clearAll}
           onZoomIn={() => mapRef.current?.zoomIn()}
           onZoomOut={() => mapRef.current?.zoomOut()}
-          onFit={() => mapRef.current?.fitBounds(parcelleBounds(), { padding: 30 })}
           onRotateLeft={() =>
             mapRef.current?.easeTo({
               bearing: (mapRef.current?.getBearing() ?? 0) - 15,
@@ -335,7 +344,6 @@ export default function EditorPage() {
           }
           onResetNorth={() => mapRef.current?.easeTo({ bearing: 0 })}
           onSave={save}
-          onSaveAs={saveAs}
           onExport={exportPng}
         />
       </div>

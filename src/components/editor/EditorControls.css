@@ -63,20 +63,35 @@
   gap: 8px;
 }
 
-/* Navigation carte : pile verticale à droite, centrée. */
-.ec--nav {
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Actions : pile verticale en bas à droite. */
-.ec--actions {
+/* Dock bas-droite : sous-menus repliables + boutons bascule. */
+.ec--dock {
   right: 12px;
   bottom: 12px;
   flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Bouton Éditer texte : au-dessus du dock, toujours visible si applicable. */
+.ec--text-edit {
+  right: 12px;
+  bottom: 112px;
+}
+
+/* Pile verticale d'un sous-menu ouvert (s'affiche au-dessus des bascules). */
+.ec__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+/* Rangée des boutons bascule. */
+.ec__toggles {
+  display: flex;
   gap: 8px;
 }
 
@@ -198,8 +213,7 @@
     font-size: 17px;
   }
 
-  .ec--tools,
-  .ec--nav {
+  .ec--tools {
     gap: 6px;
   }
 
