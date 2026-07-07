@@ -8,13 +8,27 @@ import type {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { BASE_LAYERS, CADASTRE_OVERLAY, VECTOR_STYLES } from "../../config";
 import type { EditorBaseLayer, Parcelle, SavedView } from "../../types";
+import { mergeBounds } from "../../services/cadastre";
 
 interface Props {
-  parcelle: Parcelle;
+  parcelles: Parcelle[];
   baseLayer: EditorBaseLayer;
   showCadastre: boolean;
   initialView?: SavedView;
   onMap: (map: MaplibreMap) => void;
+}
+
+function parcellesGeoJSON(parcelles: Parcelle[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: parcelles.flatMap((p) =>
+      p.rings.map((ring) => ({
+        type: "Feature" as const,
+        geometry: { type: "Polygon" as const, coordinates: [ring] },
+        properties: { id: p.id },
+      })),
+    ),
+  };
 }
 
 // Style raster (photo aérienne) construit à la volée pour MapLibre.
@@ -42,7 +56,7 @@ function styleFor(baseLayer: EditorBaseLayer): string | StyleSpecification {
 }
 
 export default function MapLibreEditorMap({
-  parcelle,
+  parcelles,
   baseLayer,
   showCadastre,
   initialView,
@@ -50,11 +64,11 @@ export default function MapLibreEditorMap({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
-  // Refs pour éviter les fermetures obsolètes dans les écouteurs.
-  const parcelleRef = useRef(parcelle);
+  const parcellesRef = useRef(parcelles);
   const showCadastreRef = useRef(showCadastre);
-  parcelleRef.current = parcelle;
+  parcellesRef.current = parcelles;
   showCadastreRef.current = showCadastre;
+  const combinedBounds = mergeBounds(parcelles);
 
   // (Ré)ajoute le cadastre et le contour de parcelle après chaque chargement
   // de style (initial ou changement de fond).
@@ -80,11 +94,7 @@ export default function MapLibreEditorMap({
     if (!map.getSource("parcelle")) {
       map.addSource("parcelle", {
         type: "geojson",
-        data: {
-          type: "Feature",
-          geometry: { type: "Polygon", coordinates: parcelleRef.current.rings },
-          properties: {},
-        },
+        data: parcellesGeoJSON(parcellesRef.current),
       });
     }
     if (!map.getLayer("parcelle-fill")) {
@@ -112,8 +122,8 @@ export default function MapLibreEditorMap({
       container: containerRef.current,
       style: styleFor(baseLayer),
       center: [
-        (parcelle.bounds[0][1] + parcelle.bounds[1][1]) / 2,
-        (parcelle.bounds[0][0] + parcelle.bounds[1][0]) / 2,
+        (combinedBounds[0][1] + combinedBounds[1][1]) / 2,
+        (combinedBounds[0][0] + combinedBounds[1][0]) / 2,
       ],
       zoom: 17,
       maxZoom: 24,
@@ -134,8 +144,8 @@ export default function MapLibreEditorMap({
         });
       } else {
         const bounds: LngLatBoundsLike = [
-          [parcelle.bounds[0][1], parcelle.bounds[0][0]],
-          [parcelle.bounds[1][1], parcelle.bounds[1][0]],
+          [combinedBounds[0][1], combinedBounds[0][0]],
+          [combinedBounds[1][1], combinedBounds[1][0]],
         ];
         map.fitBounds(bounds, { padding: 30, animate: false });
       }
@@ -189,6 +199,14 @@ export default function MapLibreEditorMap({
       map.removeLayer("cadastre");
     }
   }, [showCadastre]);
+
+  // Met à jour les contours quand la sélection de parcelles change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("parcelle") as maplibregl.GeoJSONSource | undefined;
+    source?.setData(parcellesGeoJSON(parcelles));
+  }, [parcelles]);
 
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }

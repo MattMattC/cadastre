@@ -2,15 +2,15 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchBar from "../components/SearchBar";
 import MapView from "../components/MapView";
-import { getParcelleAtPoint } from "../services/cadastre";
-import { setPendingParcelle } from "../store/projects";
+import { boundsAreAdjacent, getParcelleAtPoint } from "../services/cadastre";
+import { setPendingParcelles } from "../store/projects";
 import type { AddressSuggestion, Parcelle } from "../types";
 import "./MapPage.css";
 
 export default function MapPage() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<AddressSuggestion | null>(null);
-  const [parcelle, setParcelle] = useState<Parcelle | null>(null);
+  const [parcelles, setParcelles] = useState<Parcelle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Annule une requête de parcelle obsolète si on reclique vite.
@@ -25,12 +25,23 @@ export default function MapPage() {
     setError(null);
     try {
       const result = await getParcelleAtPoint(lat, lon, controller.signal);
-      if (result) {
-        setParcelle(result);
-      } else {
-        setParcelle(null);
+      if (!result) {
         setError("Aucune parcelle cadastrale à cet endroit.");
+        return;
       }
+
+      setParcelles((prev) => {
+        const exists = prev.some((p) => p.id === result.id);
+        if (exists) return prev.filter((p) => p.id !== result.id);
+
+        if (prev.length === 0) return [result];
+
+        const adjacent = prev.some((p) => boundsAreAdjacent(p.bounds, result.bounds));
+        if (adjacent) return [...prev, result];
+
+        // Parcelle non adjacente : on remplace la sélection.
+        return [result];
+      });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError("Impossible de récupérer la parcelle.");
@@ -40,8 +51,8 @@ export default function MapPage() {
   }
 
   function annotate() {
-    if (!parcelle) return;
-    setPendingParcelle(parcelle);
+    if (parcelles.length === 0) return;
+    setPendingParcelles(parcelles);
     navigate("/editor");
   }
 
@@ -62,14 +73,15 @@ export default function MapPage() {
       <main className="map-page__map">
         <MapView
           selected={selected}
-          parcelle={parcelle}
+          parcelles={parcelles}
           onMapClick={handleMapClick}
         />
       </main>
 
-      {!parcelle && !loading && (
+      {parcelles.length === 0 && !loading && (
         <div className="map-page__hint">
-          Touchez une parcelle sur la carte pour la sélectionner.
+          Touchez une parcelle sur la carte pour la sélectionner. Touchez des
+          parcelles adjacentes pour en ajouter d'autres.
         </div>
       )}
 
@@ -79,17 +91,28 @@ export default function MapPage() {
         <div className="map-page__hint map-page__hint--error">{error}</div>
       )}
 
-      {parcelle && (
+      {parcelles.length > 0 && (
         <div className="map-page__parcelle">
           <div className="map-page__parcelle-info">
             <strong>
-              Parcelle {parcelle.section} {parcelle.numero}
+              {parcelles.length === 1
+                ? `Parcelle ${parcelles[0].section} ${parcelles[0].numero}`
+                : `${parcelles.length} parcelles sélectionnées`}
             </strong>
             <span className="map-page__parcelle-meta">
-              {parcelle.commune ? `${parcelle.commune} · ` : ""}
-              INSEE {parcelle.codeInsee}
-              {parcelle.surface ? ` · ${parcelle.surface} m²` : ""}
+              {parcelles[0].commune ? `${parcelles[0].commune} · ` : ""}
+              INSEE {parcelles[0].codeInsee}
+              {parcelles.length === 1 && parcelles[0].surface
+                ? ` · ${parcelles[0].surface} m²`
+                : ""}
             </span>
+            {parcelles.length > 1 && (
+              <span className="map-page__parcelle-list">
+                {parcelles
+                  .map((p) => `${p.section} ${p.numero}`)
+                  .join(" · ")}
+              </span>
+            )}
           </div>
           <button
             type="button"

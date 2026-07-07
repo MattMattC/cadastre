@@ -35,7 +35,7 @@ L.Marker.prototype.options.icon = defaultIcon;
 
 interface MapViewProps {
   selected: AddressSuggestion | null;
-  parcelle: Parcelle | null;
+  parcelles: Parcelle[];
   onMapClick: (lat: number, lon: number) => void;
 }
 
@@ -60,14 +60,15 @@ function ClickHandler({ onMapClick }: { onMapClick: MapViewProps["onMapClick"] }
   return null;
 }
 
-export default function MapView({ selected, parcelle, onMapClick }: MapViewProps) {
+export default function MapView({ selected, parcelles, onMapClick }: MapViewProps) {
   // Convertit les anneaux GeoJSON [lon,lat] en positions Leaflet [lat,lon].
-  const polygonPositions = useMemo(() => {
-    if (!parcelle) return null;
-    return parcelle.rings.map((ring) =>
-      ring.map(([lon, lat]) => [lat, lon] as [number, number]),
+  const polygons = useMemo(() => {
+    return parcelles.map((parcelle) =>
+      parcelle.rings.map((ring) =>
+        ring.map(([lon, lat]) => [lat, lon] as [number, number]),
+      ),
     );
-  }, [parcelle]);
+  }, [parcelles]);
 
   return (
     <MapContainer
@@ -116,17 +117,18 @@ export default function MapView({ selected, parcelle, onMapClick }: MapViewProps
         </Marker>
       )}
 
-      {polygonPositions && (
+      {polygons.map((positions, index) => (
         <Polygon
-          positions={polygonPositions}
+          key={parcelles[index].id}
+          positions={positions}
           pathOptions={{
-            color: "#1b6ec2",
+            color: "#d62828",
             weight: 2,
-            fillColor: "#1b6ec2",
-            fillOpacity: 0.25,
+            fillColor: "#d62828",
+            fillOpacity: 0.12,
           }}
         />
-      )}
+      ))}
 
       <ClickHandler onMapClick={onMapClick} />
       <FlyToSelection selected={selected} />

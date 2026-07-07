@@ -87,7 +87,9 @@ export interface AnnotationProject {
   name: string;
   createdAt: number;
   updatedAt: number;
-  parcelle: Parcelle;
+  /** @deprecated Préférer `parcelles` */
+  parcelle?: Parcelle;
+  parcelles: Parcelle[];
   baseLayer: EditorBaseLayer;
   showCadastre: boolean;
   shapes: Shape[];

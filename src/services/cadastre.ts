@@ -56,6 +56,43 @@ function computeBounds(
   ];
 }
 
+/** Vérifie si deux emprises de parcelles sont adjacentes (ou se chevauchent). */
+export function boundsAreAdjacent(
+  a: [[number, number], [number, number]],
+  b: [[number, number], [number, number]],
+  gapDeg = 0.00008,
+): boolean {
+  const [aSW, aNE] = a;
+  const [bSW, bNE] = b;
+  return (
+    aSW[0] - gapDeg <= bNE[0] &&
+    bSW[0] - gapDeg <= aNE[0] &&
+    aSW[1] - gapDeg <= bNE[1] &&
+    bSW[1] - gapDeg <= aNE[1]
+  );
+}
+
+/** Fusionne les emprises de plusieurs parcelles. */
+export function mergeBounds(
+  parcelles: Parcelle[],
+): [[number, number], [number, number]] {
+  let minLat = Infinity;
+  let minLon = Infinity;
+  let maxLat = -Infinity;
+  let maxLon = -Infinity;
+  for (const p of parcelles) {
+    const [[slat, slon], [nlat, nlon]] = p.bounds;
+    minLat = Math.min(minLat, slat);
+    minLon = Math.min(minLon, slon);
+    maxLat = Math.max(maxLat, nlat);
+    maxLon = Math.max(maxLon, nlon);
+  }
+  return [
+    [minLat, minLon],
+    [maxLat, maxLon],
+  ];
+}
+
 /**
  * Identifie la parcelle cadastrale située sous un point (clic carte).
  * Renvoie null si aucune parcelle n'intersecte le point.
