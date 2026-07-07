@@ -55,13 +55,18 @@ export type LatLng = [number, number];
 export type ShapeType = Exclude<ToolKind, "select" | "pan">;
 
 // Une forme dessinée, ancrée en coordonnées géographiques pour suivre
-// le zoom/déplacement de la carte. L'épaisseur et la taille de police
-// restent en pixels écran (lisibilité constante).
+// le zoom/déplacement de la carte. Les tailles (épaisseur, police, symbole)
+// sont exprimées en pixels au zoom de référence `baseZoom`, puis mises à
+// l'échelle 2^(zoom - baseZoom) pour rester collées au terrain.
 export interface Shape {
   id: string;
   type: ShapeType;
   color: string;
   strokeWidth: number;
+  // Zoom carte au moment de la création (référence d'échelle).
+  baseZoom?: number;
+  // Bearing carte à la création (référence d'orientation).
+  baseBearing?: number;
   // pen / line / arrow : liste de sommets ; rect / ellipse : 2 coins opposés.
   latlngs?: LatLng[];
   // text / symbol : position d'ancrage.

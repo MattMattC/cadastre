@@ -42,7 +42,10 @@ interface SymbolImageProps {
   svg: string;
   x: number;
   y: number;
-  size: number;
+  // Facteur d'échelle lié au zoom (2^(zoom - baseZoom)).
+  scale: number;
+  // Rotation écran ajoutée par la rotation de la carte (baseBearing - bearing).
+  rotDelta: number;
   draggable: boolean;
   refCb: (node: Konva.Node | null) => void;
   onSelect: (e?: Konva.KonvaEventObject<Event>) => void;
@@ -56,7 +59,8 @@ function SymbolImage({
   svg,
   x,
   y,
-  size,
+  scale,
+  rotDelta,
   draggable,
   refCb,
   onSelect,
@@ -65,6 +69,7 @@ function SymbolImage({
 }: SymbolImageProps) {
   const img = useSvgImage(svg);
   if (!img) return null;
+  const size = (shape.size ?? 32) * scale;
   return (
     <KonvaImage
       id={shape.id}
@@ -76,7 +81,7 @@ function SymbolImage({
       height={size}
       offsetX={size / 2}
       offsetY={size / 2}
-      rotation={shape.rotation}
+      rotation={(shape.rotation ?? 0) + rotDelta}
       draggable={draggable}
       onClick={onSelect}
       onTap={onSelect}
@@ -99,8 +104,8 @@ function SymbolImage({
         node.scaleY(1);
         onUpdateShape(shape.id, {
           latlng: unproject({ x: node.x(), y: node.y() }),
-          size: Math.max(10, size * sx),
-          rotation: node.rotation(),
+          size: Math.max(10 / scale, (shape.size ?? 32) * sx),
+          rotation: node.rotation() - rotDelta,
         });
       }}
     />
@@ -119,6 +124,9 @@ interface Props {
   stageRef: RefObject<Konva.Stage>;
   project: (ll: LatLng) => Pt;
   unproject: (p: Pt) => LatLng;
+  // Vue carte courante : sert à mettre les tailles à l'échelle du terrain.
+  zoom: number;
+  bearing: number;
   onSelect: (id: string | null) => void;
   onAddShape: (shape: Shape) => void;
   onUpdateShape: (id: string, patch: Partial<Shape>) => void;
@@ -143,6 +151,8 @@ interface SegmentProps {
   variant: "line" | "arrow";
   project: (ll: LatLng) => Pt;
   unproject: (p: Pt) => LatLng;
+  // Facteur d'échelle lié au zoom (2^(zoom - baseZoom)).
+  scale: number;
   draggable: boolean;
   refCb: (node: Konva.Node | null) => void;
   onSelect: (e?: Konva.KonvaEventObject<Event>) => void;
@@ -155,6 +165,7 @@ function SegmentShape({
   variant,
   project,
   unproject,
+  scale,
   draggable,
   refCb,
   onSelect,
@@ -168,7 +179,8 @@ function SegmentShape({
   const cy = (p1.y + p2.y) / 2;
   const halfLen = Math.hypot(p2.x - p1.x, p2.y - p1.y) / 2;
   const angle = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
-  const hitH = Math.max(14, shape.strokeWidth) * 2;
+  const sw = shape.strokeWidth * scale;
+  const hitH = Math.max(14, sw) * 2;
 
   return (
     <Group
@@ -228,16 +240,16 @@ function SegmentShape({
           points={[-halfLen, 0, halfLen, 0]}
           stroke={shape.color}
           fill={shape.color}
-          strokeWidth={shape.strokeWidth}
-          pointerLength={10 + shape.strokeWidth}
-          pointerWidth={10 + shape.strokeWidth}
+          strokeWidth={sw}
+          pointerLength={(10 + shape.strokeWidth) * scale}
+          pointerWidth={(10 + shape.strokeWidth) * scale}
           listening={false}
         />
       ) : (
         <Line
           points={[-halfLen, 0, halfLen, 0]}
           stroke={shape.color}
-          strokeWidth={shape.strokeWidth}
+          strokeWidth={sw}
           lineCap="round"
           listening={false}
         />
@@ -265,6 +277,8 @@ export default function AnnotationCanvas({
   stageRef,
   project,
   unproject,
+  zoom,
+  bearing,
   onSelect,
   onAddShape,
   onUpdateShape,
@@ -340,6 +354,16 @@ export default function AnnotationCanvas({
     e.cancelBubble = true;
   }
 
+  // Facteur d'échelle d'une forme : 1 au zoom de création, ×2 par niveau.
+  function scaleFor(shape: Shape): number {
+    return Math.pow(2, zoom - (shape.baseZoom ?? zoom));
+  }
+
+  // Rotation écran induite par la rotation de la carte depuis la création.
+  function rotFor(shape: Shape): number {
+    return (shape.baseBearing ?? bearing) - bearing;
+  }
+
   function handleDown(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
     // Sur tactile, un tap émet touchstart PUIS un mousedown « fantôme ».
     if (e.evt.type === "touchstart") {
@@ -386,6 +410,8 @@ export default function AnnotationCanvas({
           size: 30 + strokeWidth * 4,
           color: def.color ?? color,
           strokeWidth,
+          baseZoom: zoom,
+          baseBearing: bearing,
         });
       } else {
         onAddShape({
@@ -397,6 +423,8 @@ export default function AnnotationCanvas({
           fontSize: 22 + strokeWidth * 4,
           color: def?.color ?? color,
           strokeWidth,
+          baseZoom: zoom,
+          baseBearing: bearing,
         });
       }
       onRequestSelectTool();
@@ -404,7 +432,13 @@ export default function AnnotationCanvas({
     }
 
     drawing.current = true;
-    const base = { id: newId(), color, strokeWidth };
+    const base = {
+      id: newId(),
+      color,
+      strokeWidth,
+      baseZoom: zoom,
+      baseBearing: bearing,
+    };
     if (tool === "pen") {
       setDraft({ ...base, type: "pen", latlngs: [ll] });
     } else if (tool === "line" || tool === "arrow") {
@@ -490,6 +524,9 @@ export default function AnnotationCanvas({
       onMouseDown: stopToStage,
       onTouchStart: stopToStage,
     };
+    // Échelle et rotation « terrain » de la forme pour la vue courante.
+    const scale = scaleFor(shape);
+    const rotDelta = rotFor(shape);
 
     // Conversion des ancrages géo → pixels pour l'affichage courant.
     if (shape.type === "pen" || shape.type === "line" || shape.type === "arrow") {
@@ -501,6 +538,7 @@ export default function AnnotationCanvas({
             variant={shape.type}
             project={project}
             unproject={unproject}
+            scale={scale}
             draggable={draggable}
             refCb={isDraft ? () => {} : registerRef(shape.id)}
             onSelect={selectShape}
@@ -533,7 +571,7 @@ export default function AnnotationCanvas({
             <Line
               points={flat}
               stroke="#ffffff"
-              strokeWidth={shape.strokeWidth + 8}
+              strokeWidth={shape.strokeWidth * scale + 8}
               lineCap="round"
               lineJoin="round"
               tension={0.3}
@@ -544,7 +582,7 @@ export default function AnnotationCanvas({
           <Line
             points={flat}
             stroke={shape.color}
-            strokeWidth={shape.strokeWidth}
+            strokeWidth={shape.strokeWidth * scale}
             lineCap="round"
             lineJoin="round"
             tension={0.3}
@@ -553,7 +591,7 @@ export default function AnnotationCanvas({
           <Line
             points={flat}
             stroke="rgba(0, 0, 0, 0.01)"
-            strokeWidth={Math.max(28, shape.strokeWidth + 18)}
+            strokeWidth={Math.max(28, shape.strokeWidth * scale + 18)}
             lineCap="round"
             lineJoin="round"
             tension={0.3}
@@ -565,90 +603,83 @@ export default function AnnotationCanvas({
     if (shape.type === "rect" || shape.type === "ellipse") {
       const a = project(shape.latlngs![0]);
       const b = project(shape.latlngs![1]);
-      const x = Math.min(a.x, b.x);
-      const y = Math.min(a.y, b.y);
-      const w = Math.abs(b.x - a.x);
-      const h = Math.abs(b.y - a.y);
+      const cx = (a.x + b.x) / 2;
+      const cy = (a.y + b.y) / 2;
+      // La forme garde son orientation terrain : la diagonale projetée est
+      // exprimée dans le repère local (tourné de rotDelta) pour retrouver
+      // largeur/hauteur, puis le Group est pivoté d'autant à l'écran.
+      const rad = (rotDelta * Math.PI) / 180;
+      const dxDiag = b.x - a.x;
+      const dyDiag = b.y - a.y;
+      const w = Math.abs(dxDiag * Math.cos(rad) + dyDiag * Math.sin(rad));
+      const h = Math.abs(-dxDiag * Math.sin(rad) + dyDiag * Math.cos(rad));
+
+      // Coins opposés (repère local → écran → géo) pour un centre/taille donnés.
+      const cornersToLatLngs = (ncx: number, ncy: number, nw: number, nh: number) => {
+        const toWorld = (p: Pt): Pt => ({
+          x: ncx + p.x * Math.cos(rad) - p.y * Math.sin(rad),
+          y: ncy + p.x * Math.sin(rad) + p.y * Math.cos(rad),
+        });
+        return [
+          unproject(toWorld({ x: -nw / 2, y: -nh / 2 })),
+          unproject(toWorld({ x: nw / 2, y: nh / 2 })),
+        ];
+      };
 
       const onDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.target;
-        const dx = node.x() - (shape.type === "rect" ? x : x + w / 2);
-        const dy = node.y() - (shape.type === "rect" ? y : y + h / 2);
-        const patch = shiftAnchors(shape, dx, dy);
-        onUpdateShape(shape.id, patch);
+        const dx = node.x() - cx;
+        const dy = node.y() - cy;
+        node.position({ x: cx, y: cy });
+        onUpdateShape(shape.id, shiftAnchors(shape, dx, dy));
       };
 
-      if (shape.type === "rect") {
-        return (
-          <Rect
-            key={shape.id}
-            id={shape.id}
-            ref={isDraft ? undefined : registerRef(shape.id)}
-            draggable={draggable}
-            onClick={selectShape}
-            onTap={selectShape}
-            {...blockStage}
-            x={x}
-            y={y}
-            width={w}
-            height={h}
-            stroke={shape.color}
-            strokeWidth={shape.strokeWidth}
-            onDragEnd={onDragEnd}
-            onTransformEnd={(e) => {
-              const node = e.target as Konva.Rect;
-              const sx = node.scaleX();
-              const sy = node.scaleY();
-              node.scaleX(1);
-              node.scaleY(1);
-              const nx = node.x();
-              const ny = node.y();
-              const nw = node.width() * sx;
-              const nh = node.height() * sy;
-              onUpdateShape(shape.id, {
-                latlngs: [
-                  unproject({ x: nx, y: ny }),
-                  unproject({ x: nx + nw, y: ny + nh }),
-                ],
-              });
-            }}
-          />
-        );
-      }
+      const onTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
+        const node = e.target as Konva.Group;
+        const sx = node.scaleX();
+        const sy = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onUpdateShape(shape.id, {
+          latlngs: cornersToLatLngs(node.x(), node.y(), w * sx, h * sy),
+        });
+      };
+
       return (
-        <Ellipse
+        <Group
           key={shape.id}
           id={shape.id}
           ref={isDraft ? undefined : registerRef(shape.id)}
+          x={cx}
+          y={cy}
+          rotation={rotDelta}
           draggable={draggable}
           onClick={selectShape}
           onTap={selectShape}
           {...blockStage}
-          x={x + w / 2}
-          y={y + h / 2}
-          radiusX={w / 2}
-          radiusY={h / 2}
-          stroke={shape.color}
-          strokeWidth={shape.strokeWidth}
           onDragEnd={onDragEnd}
-          onTransformEnd={(e) => {
-            const node = e.target as Konva.Ellipse;
-            const sx = node.scaleX();
-            const sy = node.scaleY();
-            node.scaleX(1);
-            node.scaleY(1);
-            const rx = node.radiusX() * sx;
-            const ry = node.radiusY() * sy;
-            const cx = node.x();
-            const cy = node.y();
-            onUpdateShape(shape.id, {
-              latlngs: [
-                unproject({ x: cx - rx, y: cy - ry }),
-                unproject({ x: cx + rx, y: cy + ry }),
-              ],
-            });
-          }}
-        />
+          onTransformEnd={onTransformEnd}
+        >
+          {shape.type === "rect" ? (
+            <Rect
+              x={-w / 2}
+              y={-h / 2}
+              width={w}
+              height={h}
+              stroke={shape.color}
+              strokeWidth={shape.strokeWidth * scale}
+            />
+          ) : (
+            <Ellipse
+              x={0}
+              y={0}
+              radiusX={w / 2}
+              radiusY={h / 2}
+              stroke={shape.color}
+              strokeWidth={shape.strokeWidth * scale}
+            />
+          )}
+        </Group>
       );
     }
 
@@ -663,7 +694,8 @@ export default function AnnotationCanvas({
           svg={def.svg}
           x={p.x}
           y={p.y}
-          size={shape.size ?? 32}
+          scale={scale}
+          rotDelta={rotDelta}
           draggable={draggable}
           refCb={isDraft ? () => {} : registerRef(shape.id)}
           onSelect={selectShape}
@@ -686,9 +718,9 @@ export default function AnnotationCanvas({
         x={p.x}
         y={p.y}
         text={shape.text}
-        fontSize={shape.fontSize}
+        fontSize={(shape.fontSize ?? 16) * scale}
         fill={shape.color}
-        rotation={shape.rotation}
+        rotation={(shape.rotation ?? 0) + rotDelta}
         onDragEnd={(e) => {
           const node = e.target;
           onUpdateShape(shape.id, {
@@ -703,7 +735,7 @@ export default function AnnotationCanvas({
           onUpdateShape(shape.id, {
             latlng: unproject({ x: node.x(), y: node.y() }),
             fontSize: Math.max(8, (shape.fontSize ?? 16) * sx),
-            rotation: node.rotation(),
+            rotation: node.rotation() - rotDelta,
           });
         }}
       />
@@ -730,7 +762,8 @@ export default function AnnotationCanvas({
         x: p.x,
         y: p.y,
         color: shape.color,
-        fontSize: shape.fontSize ?? 16,
+        // Taille affichée à l'échelle de la vue courante.
+        fontSize: (shape.fontSize ?? 16) * scaleFor(shape),
         initial: textPrompt.initial,
       };
     })();
@@ -755,6 +788,8 @@ export default function AnnotationCanvas({
                 fontSize: Math.max(16, strokeWidth * 5),
                 color,
                 strokeWidth,
+                baseZoom: zoom,
+                baseBearing: bearing,
               });
               // Bascule en sélection et cible le nouveau texte : il est
               // immédiatement déplaçable / redimensionnable / pivotable.

@@ -82,6 +82,15 @@ export default function EditorPage() {
     mapRef.current = map;
     // 'move' couvre déplacement, zoom et rotation (bearing).
     map.on("move", () => setViewVersion((v) => v + 1));
+    // Rétrocompat : les formes créées avant l'échelle géo-ancrée n'ont pas
+    // de zoom de référence ; on fige la vue d'ouverture comme référence.
+    setShapes((prev) =>
+      prev.map((s) =>
+        s.baseZoom == null
+          ? { ...s, baseZoom: map.getZoom(), baseBearing: map.getBearing() }
+          : s,
+      ),
+    );
     setMapReady(true);
   }, []);
 
@@ -304,6 +313,8 @@ export default function EditorPage() {
               stageRef={stageRef}
               project={project}
               unproject={unproject}
+              zoom={mapRef.current?.getZoom() ?? 0}
+              bearing={mapRef.current?.getBearing() ?? 0}
               onSelect={setSelectedId}
               onAddShape={addShape}
               onUpdateShape={updateShape}
