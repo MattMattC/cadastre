@@ -72,11 +72,6 @@ export default function EditorPage() {
   const [lineArrows, setLineArrows] = useState<LineArrows>("none");
   const [currentSymbol, setCurrentSymbol] = useState(SYMBOLS[0].id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editTextRequestId, setEditTextRequestId] = useState<string | null>(null);
-  const handleEditRequestHandled = useCallback(() => setEditTextRequestId(null), []);
-  const handleEditSelectedText = useCallback(() => {
-    if (selectedId) setEditTextRequestId(selectedId);
-  }, [selectedId]);
   const [toast, setToast] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [mapReady, setMapReady] = useState(false);
@@ -127,6 +122,18 @@ export default function EditorPage() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Pas de raccourcis pendant une saisie, ni tant que l'éditeur de texte
+      // inline est ouvert (même si son champ a perdu le focus).
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (document.querySelector(".inline-text")) return;
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
         e.preventDefault();
         deleteSelected();
@@ -313,8 +320,6 @@ export default function EditorPage() {
   }
 
   const panMode = tool === "pan";
-  const selectedShape = shapes.find((s) => s.id === selectedId);
-  const canEditText = tool === "select" && selectedShape?.type === "text";
 
   return (
     <div className="editor">
@@ -359,8 +364,6 @@ export default function EditorPage() {
               onUpdateShape={updateShape}
               onDeleteShape={deleteShape}
               onRequestSelectTool={() => setTool("select")}
-              editRequestId={editTextRequestId}
-              onEditRequestHandled={handleEditRequestHandled}
             />
           )}
         </div>
@@ -383,8 +386,6 @@ export default function EditorPage() {
           canRedo={future.length > 0}
           onRedo={redo}
           hasSelection={selectedId !== null}
-          canEditText={canEditText}
-          onEditSelectedText={handleEditSelectedText}
           onDeleteSelected={deleteSelected}
           onClear={clearAll}
           onZoomIn={() => mapRef.current?.zoomIn()}

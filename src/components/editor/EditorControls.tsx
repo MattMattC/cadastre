@@ -22,8 +22,6 @@ interface Props {
   canRedo: boolean;
   onRedo: () => void;
   hasSelection: boolean;
-  canEditText: boolean;
-  onEditSelectedText: () => void;
   onDeleteSelected: () => void;
   onClear: () => void;
   onZoomIn: () => void;
@@ -225,20 +223,6 @@ export default function EditorControls(props: Props) {
           ↷
         </button>
       </div>
-
-      {props.canEditText && (
-        <div className="ec ec--text-edit">
-          <button
-            type="button"
-            className="fab fab--active"
-            onClick={props.onEditSelectedText}
-            title="Éditer le texte sélectionné"
-            aria-label="Éditer le texte sélectionné"
-          >
-            ✎
-          </button>
-        </div>
-      )}
 
       {/* Dock bas-droite : deux sous-menus repliables (navigation / actions). */}
       <div className="ec ec--dock">

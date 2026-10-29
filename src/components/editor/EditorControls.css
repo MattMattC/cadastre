@@ -80,12 +80,6 @@
   gap: 8px;
 }
 
-/* Bouton Éditer texte : au-dessus du dock, toujours visible si applicable. */
-.ec--text-edit {
-  right: 12px;
-  bottom: 112px;
-}
-
 /* Pile verticale d'un sous-menu ouvert (s'affiche au-dessus des bascules). */
 .ec__stack {
   display: flex;

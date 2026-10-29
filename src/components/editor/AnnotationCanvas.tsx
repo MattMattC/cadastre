@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { RefObject } from "react";
 import {
   Stage,
@@ -136,9 +137,6 @@ interface Props {
   // Gomme : suppression immédiate d'une forme.
   onDeleteShape: (id: string) => void;
   onRequestSelectTool: () => void;
-  // Déclenche l'édition d'un texte depuis l'UI (bouton Éditer).
-  editRequestId?: string | null;
-  onEditRequestHandled?: () => void;
 }
 
 const TRANSFORMABLE: ShapeType[] = [
@@ -173,6 +171,14 @@ const REF_ZOOM = 18;
 
 // Épaisseur réelle des formes dessinées = curseur d'épaisseur / ce diviseur.
 const STROKE_DIVISOR = 4;
+
+// Police des textes : la même sur le canvas et dans l'éditeur inline.
+const TEXT_FONT = "Arial, Helvetica, sans-serif";
+
+// Taille de police d'un nouveau texte, exprimée au zoom de référence.
+function textFontSize(strokeWidth: number): number {
+  return (12 + strokeWidth * 4) / 4;
+}
 
 // Trait à 2 points (plein ou tirets, avec 0, 1 ou 2 têtes de flèche).
 // Déplaçable en bloc ; longueur et orientation se règlent en tirant les
@@ -350,8 +356,6 @@ export default function AnnotationCanvas({
   onUpdateShape,
   onDeleteShape,
   onRequestSelectTool,
-  editRequestId,
-  onEditRequestHandled,
 }: Props) {
   const [draft, setDraft] = useState<Shape | null>(null);
   const [textPrompt, setTextPrompt] = useState<
@@ -365,24 +369,28 @@ export default function AnnotationCanvas({
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Map<string, Konva.Node>>(new Map());
 
+  // Ouvre l'éditeur inline de façon synchrone, pendant le geste utilisateur :
+  // indispensable pour que le focus (et le clavier mobile) soit accepté.
+  function openTextPrompt(prompt: NonNullable<typeof textPrompt>) {
+    flushSync(() => setTextPrompt(prompt));
+  }
+
   function editText(shape: Shape) {
     if (shape.type !== "text") return;
     onSelect(shape.id);
-    setTextPrompt({
+    openTextPrompt({
       mode: "edit",
       shapeId: shape.id,
       initial: shape.text ?? "",
     });
   }
 
-  // Édition demandée par le bouton « Éditer ».
+  // Si le texte en cours d'édition disparaît (suppression, annulation),
+  // on referme l'éditeur au lieu de garder une édition fantôme.
   useEffect(() => {
-    if (!editRequestId) return;
-    const shape = shapes.find((s) => s.id === editRequestId && s.type === "text");
-    if (shape) editText(shape);
-    onEditRequestHandled?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editRequestId]);
+    if (textPrompt?.mode !== "edit") return;
+    if (!shapes.some((s) => s.id === textPrompt.shapeId)) setTextPrompt(null);
+  }, [shapes, textPrompt]);
 
   // Attache le Transformer à la forme sélectionnée.
   useEffect(() => {
@@ -395,6 +403,17 @@ export default function AnnotationCanvas({
       return;
     }
     tr.rotateEnabled(ROTATABLE.includes(shape.type));
+    // Textes et symboles : poignées aux coins seulement, sinon elles
+    // recouvrent la forme (souvent petite) et empêchent de la toucher.
+    tr.enabledAnchors(
+      shape.type === "text" || shape.type === "symbol"
+        ? ["top-left", "top-right", "bottom-left", "bottom-right"]
+        : [
+            "top-left", "top-center", "top-right",
+            "middle-left", "middle-right",
+            "bottom-left", "bottom-center", "bottom-right",
+          ],
+    );
     const node = nodeRefs.current.get(selectedId!);
     tr.nodes(node ? [node] : []);
     tr.getLayer()?.batchDraw();
@@ -467,7 +486,10 @@ export default function AnnotationCanvas({
     }
 
     if (tool === "text") {
-      setTextPrompt({ mode: "create", latlng: ll });
+      // Konva ne bloque pas le mousedown souris : sans ça, l'action par
+      // défaut du navigateur reprendrait le focus juste après l'avoir donné.
+      if (e.evt.cancelable) e.evt.preventDefault();
+      openTextPrompt({ mode: "create", latlng: ll });
       return;
     }
 
@@ -609,6 +631,14 @@ export default function AnnotationCanvas({
       if (tool === "eraser") {
         onDeleteShape(shape.id);
         return;
+      }
+      if (shape.type === "text") {
+        // Outil Texte sur un texte existant, ou tap sur un texte déjà
+        // sélectionné : on passe directement en édition.
+        if (tool === "text" || (tool === "select" && selectedId === shape.id)) {
+          editText(shape);
+          return;
+        }
       }
       if (tool !== "select") onRequestSelectTool();
       onSelect(shape.id);
@@ -798,7 +828,9 @@ export default function AnnotationCanvas({
       );
     }
     // Texte : déplaçable / redimensionnable / pivotable comme un symbole.
-    // Édition via le bouton « ✎ Éditer » quand le texte est sélectionné.
+    // Édition : double-clic / double-tap, tap sur un texte déjà sélectionné,
+    // ou tap avec l'outil Texte.
+    const fs = (shape.fontSize ?? 16) * scale;
     return (
       <Text
         key={shape.id}
@@ -807,12 +839,21 @@ export default function AnnotationCanvas({
         draggable={draggable}
         onClick={selectShape}
         onTap={selectShape}
+        onDblClick={() => editText(shape)}
+        onDblTap={() => editText(shape)}
         {...blockStage}
         x={p.x}
         y={p.y}
         text={shape.text}
-        fontSize={(shape.fontSize ?? 16) * scale}
+        fontSize={fs}
+        fontFamily={TEXT_FONT}
+        fontStyle="bold"
         fill={shape.color}
+        // Halo blanc pour rester lisible sur la photo aérienne.
+        stroke="#ffffff"
+        strokeWidth={Math.max(1, fs * 0.14)}
+        fillAfterStrokeEnabled
+        lineJoin="round"
         rotation={(shape.rotation ?? 0) + rotDelta}
         onDragEnd={(e) => {
           const node = e.target;
@@ -827,7 +868,7 @@ export default function AnnotationCanvas({
           node.scaleY(1);
           onUpdateShape(shape.id, {
             latlng: unproject({ x: node.x(), y: node.y() }),
-            fontSize: Math.max(8, (shape.fontSize ?? 16) * sx),
+            fontSize: Math.max(1, (shape.fontSize ?? 16) * sx),
             rotation: node.rotation() - rotDelta,
           });
         }}
@@ -844,7 +885,9 @@ export default function AnnotationCanvas({
           x: p.x,
           y: p.y,
           color,
-          fontSize: Math.max(16, strokeWidth * 5),
+          // Taille affichée au zoom courant (la taille est stockée à REF_ZOOM).
+          fontSize: textFontSize(strokeWidth) * Math.pow(2, zoom - REF_ZOOM),
+          rotation: 0,
           initial: "",
         };
       }
@@ -855,8 +898,9 @@ export default function AnnotationCanvas({
         x: p.x,
         y: p.y,
         color: shape.color,
-        // Taille affichée à l'échelle de la vue courante.
+        // Taille et rotation affichées à l'échelle de la vue courante.
         fontSize: (shape.fontSize ?? 16) * scaleFor(shape),
+        rotation: (shape.rotation ?? 0) + rotFor(shape),
         initial: textPrompt.initial,
       };
     })();
@@ -869,27 +913,33 @@ export default function AnnotationCanvas({
           y={inlineText.y}
           color={inlineText.color}
           fontSize={inlineText.fontSize}
+          rotation={inlineText.rotation}
           initialValue={inlineText.initial}
           onConfirm={(value) => {
             if (textPrompt!.mode === "create") {
-              const id = newId();
-              onAddShape({
-                id,
-                type: "text",
-                latlng: textPrompt!.latlng,
-                text: value,
-                fontSize: Math.max(16, strokeWidth * 5),
-                color,
-                strokeWidth,
-                baseZoom: zoom,
-                baseBearing: bearing,
-              });
-              // Bascule en sélection et cible le nouveau texte : il est
-              // immédiatement déplaçable / redimensionnable / pivotable.
-              onRequestSelectTool();
-              onSelect(id);
-            } else {
+              if (value) {
+                const id = newId();
+                onAddShape({
+                  id,
+                  type: "text",
+                  latlng: textPrompt!.latlng,
+                  text: value,
+                  fontSize: textFontSize(strokeWidth),
+                  color,
+                  strokeWidth,
+                  baseZoom: REF_ZOOM,
+                  baseBearing: bearing,
+                });
+                // Bascule en sélection et cible le nouveau texte : il est
+                // immédiatement déplaçable / redimensionnable / pivotable.
+                onRequestSelectTool();
+                onSelect(id);
+              }
+            } else if (value) {
               onUpdateShape(textPrompt!.shapeId, { text: value });
+            } else {
+              // Texte vidé à l'édition : on supprime la forme.
+              onDeleteShape(textPrompt!.shapeId);
             }
             setTextPrompt(null);
           }}

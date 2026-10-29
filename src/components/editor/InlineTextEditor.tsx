@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./InlineTextEditor.css";
 
@@ -7,7 +7,10 @@ interface Props {
   y: number;
   color: string;
   fontSize: number;
+  // Rotation écran du texte (degrés), pour que la saisie se superpose au rendu.
+  rotation?: number;
   initialValue?: string;
+  // Reçoit le texte nettoyé, éventuellement vide (à l'appelant de décider).
   onConfirm: (text: string) => void;
   onCancel: () => void;
 }
@@ -18,6 +21,7 @@ export default function InlineTextEditor({
   y,
   color,
   fontSize,
+  rotation = 0,
   initialValue = "",
   onConfirm,
   onCancel,
@@ -25,11 +29,17 @@ export default function InlineTextEditor({
   const [value, setValue] = useState(initialValue);
   const [pos, setPos] = useState({ x, y });
   const fieldRef = useRef<HTMLTextAreaElement>(null);
+  // Instant d'ouverture : le 2e clic d'un double-clic (qui a ouvert l'éditeur
+  // via le 1er) arrive sur le fond et ne doit pas le refermer aussitôt.
+  const openedAt = useRef(performance.now());
 
-  useEffect(() => {
+  // Focus immédiat au montage. En layout effect : il s'exécute dans le même
+  // tour que le geste qui a ouvert l'éditeur (voir flushSync côté canvas),
+  // sinon iOS/Android refusent d'ouvrir le clavier.
+  useLayoutEffect(() => {
     const field = fieldRef.current;
     if (!field) return;
-    field.focus();
+    field.focus({ preventScroll: true });
     field.setSelectionRange(field.value.length, field.value.length);
     resizeField(field);
   }, []);
@@ -72,9 +82,7 @@ export default function InlineTextEditor({
   }
 
   function submit() {
-    const trimmed = value.trim();
-    if (trimmed) onConfirm(trimmed);
-    else onCancel();
+    onConfirm(value.trim());
   }
 
   // Rendu dans <body> : passe au-dessus de la barre d'outils du haut et
@@ -85,7 +93,17 @@ export default function InlineTextEditor({
       role="presentation"
       onPointerDown={(e) => {
         // Un tap hors du champ et hors de la barre valide le texte.
-        if (e.target === e.currentTarget) submit();
+        if (e.target !== e.currentTarget) return;
+        // Le fond ne doit jamais prendre le focus au champ.
+        e.preventDefault();
+        if (performance.now() - openedAt.current < 400) {
+          fieldRef.current?.focus({ preventScroll: true });
+          return;
+        }
+        submit();
+      }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) e.preventDefault();
       }}
     >
       <div className="inline-text__bar">
@@ -115,6 +133,7 @@ export default function InlineTextEditor({
           top: pos.y,
           color,
           fontSize,
+          transform: rotation ? `rotate(${rotation}deg)` : undefined,
         }}
         value={value}
         onChange={(e) => {
