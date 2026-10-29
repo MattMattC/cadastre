@@ -72,6 +72,14 @@
   gap: 8px;
 }
 
+/* Historique (Précédent / Suivant) : bas-gauche, toujours visible. */
+.ec--history {
+  left: 12px;
+  bottom: 12px;
+  flex-direction: row;
+  gap: 8px;
+}
+
 /* Bouton Éditer texte : au-dessus du dock, toujours visible si applicable. */
 .ec--text-edit {
   right: 12px;
@@ -153,6 +161,42 @@
   min-width: 34px;
   text-align: right;
   color: #333;
+}
+
+/* Options de l'outil trait : style de ligne et têtes de flèche. */
+.ec__opts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ec__opt {
+  width: 30px;
+  height: 28px;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ec__opt--active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  color: var(--color-accent);
+}
+
+.ec__opts-sep {
+  width: 1px;
+  height: 20px;
+  background: #ddd;
+  margin: 0 2px;
 }
 
 /* Palette symboles : sous le panneau style, à gauche. */

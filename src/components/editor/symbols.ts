@@ -9,7 +9,6 @@ export type SymbolCategory =
   | "regards"
   | "equipements"
   | "appareils"
-  | "reseaux"
   | "reperes";
 
 export interface SymbolDef {
@@ -27,7 +26,6 @@ export const CATEGORIES: { id: SymbolCategory; label: string }[] = [
   { id: "regards", label: "Regards / boîtes" },
   { id: "equipements", label: "Équipements" },
   { id: "appareils", label: "Appareils sanitaires" },
-  { id: "reseaux", label: "Réseaux / canalisations" },
   { id: "reperes", label: "Repères" },
 ];
 
@@ -138,29 +136,6 @@ const checkValve = () =>
     `<line x1="2" y1="16" x2="30" y2="16" stroke="${C.dark}" stroke-width="2"/><path d="M12 9 L12 23 L22 16 Z" fill="#fff" stroke="${C.dark}" stroke-width="2"/><line x1="22" y1="9" x2="22" y2="23" stroke="${C.dark}" stroke-width="2"/>`,
   );
 
-interface LineOpts {
-  dash?: string;
-  arrow?: boolean;
-  dots?: boolean;
-  tick?: boolean;
-}
-
-const lineIcon = (c: string, opts: LineOpts = {}) => {
-  const stroke = opts.dots
-    ? 'stroke-dasharray="1.5 4"'
-    : opts.dash
-      ? `stroke-dasharray="${opts.dash}"`
-      : "";
-  const x2 = opts.arrow ? 23 : 30;
-  const head = opts.arrow ? `<path d="M30 16 l-8 -4.5 v9 z" fill="${c}"/>` : "";
-  const tick = opts.tick
-    ? `<line x1="16" y1="10" x2="16" y2="22" stroke="${c}" stroke-width="2.4"/>`
-    : "";
-  return wrap(
-    `<line x1="2" y1="16" x2="${x2}" y2="16" stroke="${c}" stroke-width="3" ${stroke} stroke-linecap="round"/>${head}${tick}`,
-  );
-};
-
 // --- La palette ----------------------------------------------------------
 export const SYMBOLS: SymbolDef[] = [
   // Regards / boîtes
@@ -213,29 +188,6 @@ export const SYMBOLS: SymbolDef[] = [
   { id: "lavabo", kind: "text", category: "appareils", label: "Lavabo", text: "Lavabo", color: C.red },
   { id: "baignoire", kind: "text", category: "appareils", label: "Baignoire", text: "Baignoire", color: C.red },
   { id: "bidet", kind: "text", category: "appareils", label: "Bidet", text: "Bidet", color: C.red },
-
-  // Réseaux / canalisations (traits)
-  { id: "cana-eu", kind: "svg", category: "reseaux", label: "cana EU", svg: lineIcon(C.red) },
-  { id: "cana-ep", kind: "svg", category: "reseaux", label: "cana EP", svg: lineIcon(C.blue) },
-  { id: "cana-privee", kind: "svg", category: "reseaux", label: "cana privée", svg: lineIcon(C.grey, { dots: true }) },
-  { id: "reseau-eu", kind: "svg", category: "reseaux", label: "réseau EU", svg: lineIcon(C.red, { arrow: true }) },
-  { id: "reseau-unitaire", kind: "svg", category: "reseaux", label: "réseau unitaire", svg: lineIcon(C.green) },
-  {
-    id: "branchement-unitaire",
-    kind: "svg",
-    category: "reseaux",
-    label: "branchement unitaire",
-    svg: lineIcon(C.green, { tick: true }),
-  },
-  { id: "ep-fil-eau", kind: "svg", category: "reseaux", label: "EP fil d'eau", svg: lineIcon(C.blue) },
-  {
-    id: "ep-infiltration",
-    kind: "svg",
-    category: "reseaux",
-    label: "EP infiltration",
-    svg: lineIcon(C.blue, { dash: "5 4", arrow: true }),
-  },
-  { id: "master15", kind: "svg", category: "reseaux", label: "Master.15", svg: lineIcon(C.green, { dash: "5 4" }) },
 
   // Repères génériques
   { id: "repere", kind: "emoji", category: "reperes", label: "Repère", text: "📍" },

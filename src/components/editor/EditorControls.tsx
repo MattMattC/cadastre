@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ToolKind } from "../../types";
+import type { LineArrows, ToolKind } from "../../types";
 import { SYMBOLS, svgToDataUrl } from "./symbols";
 import "./EditorControls.css";
 
@@ -10,10 +10,16 @@ interface Props {
   setColor: (c: string) => void;
   strokeWidth: number;
   setStrokeWidth: (w: number) => void;
+  lineDashed: boolean;
+  setLineDashed: (d: boolean) => void;
+  lineArrows: LineArrows;
+  setLineArrows: (a: LineArrows) => void;
   currentSymbol: string;
   setCurrentSymbol: (s: string) => void;
   canUndo: boolean;
   onUndo: () => void;
+  canRedo: boolean;
+  onRedo: () => void;
   hasSelection: boolean;
   canEditText: boolean;
   onEditSelectedText: () => void;
@@ -36,12 +42,22 @@ const TOOLS: { kind: ToolKind; icon: string; label: string }[] = [
     label: "Sélectionner et déplacer une annotation",
   },
   { kind: "pen", icon: "✎", label: "Crayon" },
-  { kind: "line", icon: "／", label: "Trait" },
-  { kind: "arrow", icon: "➜", label: "Dessiner une flèche" },
+  { kind: "line", icon: "／", label: "Trait / flèche" },
   { kind: "rect", icon: "▭", label: "Rectangle" },
   { kind: "ellipse", icon: "◯", label: "Ellipse" },
   { kind: "text", icon: "T", label: "Texte" },
   { kind: "symbol", icon: "★", label: "Symbole" },
+];
+
+const LINE_STYLES: { dashed: boolean; icon: string; label: string }[] = [
+  { dashed: false, icon: "━", label: "Trait plein" },
+  { dashed: true, icon: "┅", label: "Trait en tirets" },
+];
+
+const LINE_ARROWS: { arrows: LineArrows; icon: string; label: string }[] = [
+  { arrows: "none", icon: "—", label: "Sans flèche" },
+  { arrows: "end", icon: "→", label: "Flèche à l'arrivée" },
+  { arrows: "both", icon: "↔", label: "Flèche aux deux bouts" },
 ];
 
 const COLORS = ["#d62828", "#1b6ec2", "#2a9d8f", "#e9c46a", "#000000", "#ffffff"];
@@ -111,6 +127,39 @@ export default function EditorControls(props: Props) {
             />
             <span className="ec__stroke-val">{props.strokeWidth}px</span>
           </div>
+          {props.tool === "line" && (
+            <div className="ec__opts">
+              {LINE_STYLES.map((o) => (
+                <button
+                  key={String(o.dashed)}
+                  type="button"
+                  className={
+                    "ec__opt" + (props.lineDashed === o.dashed ? " ec__opt--active" : "")
+                  }
+                  onClick={() => props.setLineDashed(o.dashed)}
+                  title={o.label}
+                  aria-label={o.label}
+                >
+                  {o.icon}
+                </button>
+              ))}
+              <span className="ec__opts-sep" />
+              {LINE_ARROWS.map((o) => (
+                <button
+                  key={o.arrows}
+                  type="button"
+                  className={
+                    "ec__opt" + (props.lineArrows === o.arrows ? " ec__opt--active" : "")
+                  }
+                  onClick={() => props.setLineArrows(o.arrows)}
+                  title={o.label}
+                  aria-label={o.label}
+                >
+                  {o.icon}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -141,6 +190,29 @@ export default function EditorControls(props: Props) {
       )}
 
       {/* Bouton Éditer : visible dès qu'un texte est sélectionné (hors menu ⋯). */}
+      <div className="ec ec--history">
+        <button
+          type="button"
+          className="fab"
+          onClick={props.onUndo}
+          disabled={!props.canUndo}
+          title="Précédent (Ctrl+Z)"
+          aria-label="Précédent"
+        >
+          ↶
+        </button>
+        <button
+          type="button"
+          className="fab"
+          onClick={props.onRedo}
+          disabled={!props.canRedo}
+          title="Suivant (Ctrl+Shift+Z)"
+          aria-label="Suivant"
+        >
+          ↷
+        </button>
+      </div>
+
       {props.canEditText && (
         <div className="ec ec--text-edit">
           <button
@@ -194,15 +266,6 @@ export default function EditorControls(props: Props) {
 
         {openGroup === "actions" && (
           <div className="ec__stack">
-            <button
-              type="button"
-              className="fab"
-              onClick={props.onUndo}
-              disabled={!props.canUndo}
-              title="Annuler"
-            >
-              ↶
-            </button>
             <button
               type="button"
               className="fab"

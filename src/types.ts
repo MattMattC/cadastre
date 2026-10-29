@@ -42,7 +42,6 @@ export type ToolKind =
   | "pan"
   | "pen"
   | "line"
-  | "arrow"
   | "rect"
   | "ellipse"
   | "text"
@@ -52,7 +51,12 @@ export type ToolKind =
 export type LatLng = [number, number];
 
 // Type de forme effectivement dessinable.
-export type ShapeType = Exclude<ToolKind, "select" | "pan">;
+// Têtes de flèche d'un trait : aucune, à l'arrivée, ou aux deux extrémités.
+export type LineArrows = "none" | "end" | "both";
+
+// "arrow" : ancien type de forme (projets enregistrés), rendu comme un trait
+// avec `arrows: "end"`. Les nouveaux traits utilisent `type: "line"`.
+export type ShapeType = Exclude<ToolKind, "select" | "pan"> | "arrow";
 
 // Une forme dessinée, ancrée en coordonnées géographiques pour suivre
 // le zoom/déplacement de la carte. Les tailles (épaisseur, police, symbole)
@@ -63,6 +67,9 @@ export interface Shape {
   type: ShapeType;
   color: string;
   strokeWidth: number;
+  // Trait : pointillé et têtes de flèche.
+  dashed?: boolean;
+  arrows?: LineArrows;
   // Zoom carte au moment de la création (référence d'échelle).
   baseZoom?: number;
   // Bearing carte à la création (référence d'orientation).

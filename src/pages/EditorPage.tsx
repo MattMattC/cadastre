@@ -18,6 +18,7 @@ import type {
   AnnotationProject,
   EditorBaseLayer,
   LatLng,
+  LineArrows,
   Parcelle,
   Shape,
   ToolKind,
@@ -53,14 +54,18 @@ export default function EditorPage() {
     initialProject?.baseLayer ?? "ignPlan",
   );
   const [showCadastre, setShowCadastre] = useState<boolean>(
-    initialProject?.showCadastre ?? true,
+    initialProject?.showCadastre ?? false,
   );
 
   const [shapes, setShapes] = useState<Shape[]>(initialProject?.shapes ?? []);
+  // Historique : états précédents (Annuler) et états annulés (Rétablir).
   const [past, setPast] = useState<Shape[][]>([]);
+  const [future, setFuture] = useState<Shape[][]>([]);
   const [tool, setTool] = useState<ToolKind>("pan");
   const [color, setColor] = useState("#d62828");
-  const [strokeWidth, setStrokeWidth] = useState(4);
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [lineDashed, setLineDashed] = useState(false);
+  const [lineArrows, setLineArrows] = useState<LineArrows>("none");
   const [currentSymbol, setCurrentSymbol] = useState(SYMBOLS[0].id);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editTextRequestId, setEditTextRequestId] = useState<string | null>(null);
@@ -121,6 +126,12 @@ export default function EditorPage() {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
         e.preventDefault();
         deleteSelected();
+      } else if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))
+      ) {
+        e.preventDefault();
+        redo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         undo();
@@ -132,7 +143,7 @@ export default function EditorPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, shapes, past]);
+  }, [selectedId, shapes, past, future]);
 
   function showToast(message: string) {
     setToast(message);
@@ -141,6 +152,7 @@ export default function EditorPage() {
 
   function commit(next: Shape[]) {
     setPast((p) => [...p, shapes]);
+    setFuture([]);
     setShapes(next);
   }
 
@@ -169,8 +181,18 @@ export default function EditorPage() {
   function undo() {
     if (past.length === 0) return;
     const previous = past[past.length - 1];
+    setFuture((f) => [...f, shapes]);
     setShapes(previous);
     setPast((p) => p.slice(0, -1));
+    setSelectedId(null);
+  }
+
+  function redo() {
+    if (future.length === 0) return;
+    const next = future[future.length - 1];
+    setPast((p) => [...p, shapes]);
+    setShapes(next);
+    setFuture((f) => f.slice(0, -1));
     setSelectedId(null);
   }
 
@@ -308,6 +330,8 @@ export default function EditorPage() {
               tool={tool}
               color={color}
               strokeWidth={strokeWidth}
+              lineDashed={lineDashed}
+              lineArrows={lineArrows}
               currentSymbol={currentSymbol}
               selectedId={selectedId}
               stageRef={stageRef}
@@ -332,10 +356,16 @@ export default function EditorPage() {
           setColor={setColor}
           strokeWidth={strokeWidth}
           setStrokeWidth={setStrokeWidth}
+          lineDashed={lineDashed}
+          setLineDashed={setLineDashed}
+          lineArrows={lineArrows}
+          setLineArrows={setLineArrows}
           currentSymbol={currentSymbol}
           setCurrentSymbol={setCurrentSymbol}
           canUndo={past.length > 0}
           onUndo={undo}
+          canRedo={future.length > 0}
+          onRedo={redo}
           hasSelection={selectedId !== null}
           canEditText={canEditText}
           onEditSelectedText={handleEditSelectedText}

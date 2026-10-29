@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import {
   Stage,
   Layer,
   Group,
   Line,
-  Arrow,
   Rect,
+  Circle,
   Ellipse,
   Text,
   Image as KonvaImage,
   Transformer,
 } from "react-konva";
 import Konva from "konva";
-import type { LatLng, Shape, ShapeType, ToolKind } from "../../types";
+import type { LatLng, LineArrows, Shape, ShapeType, ToolKind } from "../../types";
 import { newId } from "../../store/projects";
 import { getSymbol, svgToDataUrl } from "./symbols";
 import InlineTextEditor from "./InlineTextEditor";
@@ -69,7 +69,7 @@ function SymbolImage({
 }: SymbolImageProps) {
   const img = useSvgImage(svg);
   if (!img) return null;
-  const size = (shape.size ?? 32) * scale;
+  const size = (shape.size ?? 3) * scale;
   return (
     <KonvaImage
       id={shape.id}
@@ -104,7 +104,7 @@ function SymbolImage({
         node.scaleY(1);
         onUpdateShape(shape.id, {
           latlng: unproject({ x: node.x(), y: node.y() }),
-          size: Math.max(10 / scale, (shape.size ?? 32) * sx),
+          size: Math.max(1.5 / scale, (shape.size ?? 3) * sx),
           rotation: node.rotation() - rotDelta,
         });
       }}
@@ -119,6 +119,9 @@ interface Props {
   tool: ToolKind;
   color: string;
   strokeWidth: number;
+  // Options de l'outil trait.
+  lineDashed: boolean;
+  lineArrows: LineArrows;
   currentSymbol: string;
   selectedId: string | null;
   stageRef: RefObject<Konva.Stage>;
@@ -137,52 +140,105 @@ interface Props {
 }
 
 const TRANSFORMABLE: ShapeType[] = [
-  "line",
-  "arrow",
   "rect",
   "ellipse",
   "text",
   "symbol",
 ];
-const ROTATABLE: ShapeType[] = ["line", "arrow", "text", "symbol"];
+const ROTATABLE: ShapeType[] = ["text", "symbol"];
 
 interface SegmentProps {
   shape: Shape;
-  variant: "line" | "arrow";
   project: (ll: LatLng) => Pt;
   unproject: (p: Pt) => LatLng;
   // Facteur d'échelle lié au zoom (2^(zoom - baseZoom)).
   scale: number;
   draggable: boolean;
+  // Sélectionné : halo + poignée à chaque extrémité.
+  selected: boolean;
   refCb: (node: Konva.Node | null) => void;
   onSelect: (e?: Konva.KonvaEventObject<Event>) => void;
   onUpdateShape: (id: string, patch: Partial<Shape>) => void;
 }
 
-// Trait ou flèche à 2 points, redimensionnable et pivotable via un Group.
+const HANDLE_RADIUS = 8;
+
+// Zoom de référence des symboles : leur taille est exprimée à ce zoom, pas au
+// zoom courant, pour que deux symboles posés à des zooms différents aient la
+// même taille terrain.
+const SYMBOL_BASE_ZOOM = 18;
+
+// Trait à 2 points (plein ou tirets, avec 0, 1 ou 2 têtes de flèche).
+// Déplaçable en bloc ; longueur et orientation se règlent en tirant les
+// poignées d'extrémité (pas de Transformer).
 function SegmentShape({
   shape,
-  variant,
   project,
   unproject,
   scale,
   draggable,
+  selected,
   refCb,
   onSelect,
   onUpdateShape,
 }: SegmentProps) {
+  // Extrémité en cours de déplacement : aperçu local, un seul commit au relâché.
+  const [dragEnd, setDragEnd] = useState<{ idx: 0 | 1; pt: Pt } | null>(null);
   const ll0 = shape.latlngs![0];
   const ll1 = shape.latlngs![1];
-  const p1 = project(ll0);
-  const p2 = project(ll1);
+  const p1 = dragEnd?.idx === 0 ? dragEnd.pt : project(ll0);
+  const p2 = dragEnd?.idx === 1 ? dragEnd.pt : project(ll1);
   const cx = (p1.x + p2.x) / 2;
   const cy = (p1.y + p2.y) / 2;
   const halfLen = Math.hypot(p2.x - p1.x, p2.y - p1.y) / 2;
   const angle = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
   const sw = shape.strokeWidth * scale;
   const hitH = Math.max(14, sw) * 2;
+  // Les anciennes formes "arrow" n'ont pas de champ `arrows`.
+  const arrows: LineArrows =
+    shape.arrows ?? (shape.type === "arrow" ? "end" : "none");
+  const headLen = arrows === "none" ? 0 : (10 + shape.strokeWidth) * scale;
+  // Le fût s'arrête un peu avant la pointe pour ne pas dépasser sous la tête.
+  const x0 = arrows === "both" ? -halfLen + headLen * 0.7 : -halfLen;
+  const x1 = Math.max(x0, arrows === "none" ? halfLen : halfLen - headLen * 0.7);
+  const dash = shape.dashed ? [sw * 3, sw * 2] : undefined;
+
+  const stop = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    e.cancelBubble = true;
+  };
+
+  function handleAt(idx: 0 | 1, pt: Pt) {
+    return (
+      <Circle
+        key={idx}
+        x={pt.x}
+        y={pt.y}
+        radius={HANDLE_RADIUS}
+        fill="#ffffff"
+        stroke={shape.color}
+        strokeWidth={2}
+        shadowColor="rgba(0,0,0,0.35)"
+        shadowBlur={3}
+        draggable
+        onMouseDown={stop}
+        onTouchStart={stop}
+        onDragMove={(e) => {
+          const node = e.target;
+          setDragEnd({ idx, pt: { x: node.x(), y: node.y() } });
+        }}
+        onDragEnd={(e) => {
+          const node = e.target;
+          const next = [...shape.latlngs!] as LatLng[];
+          next[idx] = unproject({ x: node.x(), y: node.y() });
+          setDragEnd(null);
+          onUpdateShape(shape.id, { latlngs: next });
+        }}
+      />
+    );
+  }
 
   return (
+    <Fragment>
     <Group
       id={shape.id}
       ref={refCb}
@@ -192,12 +248,8 @@ function SegmentShape({
       draggable={draggable}
       onClick={onSelect}
       onTap={onSelect}
-      onMouseDown={(e) => {
-        e.cancelBubble = true;
-      }}
-      onTouchStart={(e) => {
-        e.cancelBubble = true;
-      }}
+      onMouseDown={stop}
+      onTouchStart={stop}
       onDragEnd={(e) => {
         const node = e.target;
         const dx = node.x() - cx;
@@ -210,47 +262,46 @@ function SegmentShape({
           }),
         });
       }}
-      onTransformEnd={(e) => {
-        const node = e.target as Konva.Group;
-        const sx = node.scaleX();
-        const sy = node.scaleY();
-        const rot = (node.rotation() * Math.PI) / 180;
-        node.scaleX(1);
-        node.scaleY(1);
-        const newHalf = halfLen * sx;
-        const ncx = node.x();
-        const ncy = node.y();
-        onUpdateShape(shape.id, {
-          latlngs: [
-            unproject({
-              x: ncx - newHalf * Math.cos(rot),
-              y: ncy - newHalf * Math.sin(rot),
-            }),
-            unproject({
-              x: ncx + newHalf * Math.cos(rot),
-              y: ncy + newHalf * Math.sin(rot),
-            }),
-          ],
-          strokeWidth: Math.max(1, shape.strokeWidth * sy),
-        });
-      }}
     >
-      {variant === "arrow" ? (
-        <Arrow
-          points={[-halfLen, 0, halfLen, 0]}
-          stroke={shape.color}
-          fill={shape.color}
-          strokeWidth={sw}
-          pointerLength={(10 + shape.strokeWidth) * scale}
-          pointerWidth={(10 + shape.strokeWidth) * scale}
-          listening={false}
-        />
-      ) : (
+      {selected && (
         <Line
           points={[-halfLen, 0, halfLen, 0]}
-          stroke={shape.color}
-          strokeWidth={sw}
+          stroke="#ffffff"
+          strokeWidth={sw + 8}
           lineCap="round"
+          opacity={0.85}
+          listening={false}
+        />
+      )}
+      <Line
+        points={[x0, 0, x1, 0]}
+        stroke={shape.color}
+        strokeWidth={sw}
+        lineCap={shape.dashed ? "butt" : "round"}
+        dash={dash}
+        listening={false}
+      />
+      {arrows !== "none" && (
+        <Line
+          points={[
+            halfLen, 0,
+            halfLen - headLen, -headLen / 2,
+            halfLen - headLen, headLen / 2,
+          ]}
+          closed
+          fill={shape.color}
+          listening={false}
+        />
+      )}
+      {arrows === "both" && (
+        <Line
+          points={[
+            -halfLen, 0,
+            -halfLen + headLen, -headLen / 2,
+            -halfLen + headLen, headLen / 2,
+          ]}
+          closed
+          fill={shape.color}
           listening={false}
         />
       )}
@@ -262,6 +313,9 @@ function SegmentShape({
         opacity={0}
       />
     </Group>
+    {selected && draggable && handleAt(0, p1)}
+    {selected && draggable && handleAt(1, p2)}
+    </Fragment>
   );
 }
 
@@ -272,6 +326,8 @@ export default function AnnotationCanvas({
   tool,
   color,
   strokeWidth,
+  lineDashed,
+  lineArrows,
   currentSymbol,
   selectedId,
   stageRef,
@@ -407,10 +463,10 @@ export default function AnnotationCanvas({
           type: "symbol",
           latlng: ll,
           symbolId: def.id,
-          size: 30 + strokeWidth * 4,
+          size: (30 + strokeWidth * 4) / 12,
           color: def.color ?? color,
           strokeWidth,
-          baseZoom: zoom,
+          baseZoom: SYMBOL_BASE_ZOOM,
           baseBearing: bearing,
         });
       } else {
@@ -420,10 +476,10 @@ export default function AnnotationCanvas({
           latlng: ll,
           symbolId: def?.id,
           text: def?.text ?? currentSymbol,
-          fontSize: 22 + strokeWidth * 4,
+          fontSize: (22 + strokeWidth * 4) / 12,
           color: def?.color ?? color,
           strokeWidth,
-          baseZoom: zoom,
+          baseZoom: SYMBOL_BASE_ZOOM,
           baseBearing: bearing,
         });
       }
@@ -441,8 +497,14 @@ export default function AnnotationCanvas({
     };
     if (tool === "pen") {
       setDraft({ ...base, type: "pen", latlngs: [ll] });
-    } else if (tool === "line" || tool === "arrow") {
-      setDraft({ ...base, type: tool, latlngs: [ll, ll] });
+    } else if (tool === "line") {
+      setDraft({
+        ...base,
+        type: "line",
+        latlngs: [ll, ll],
+        dashed: lineDashed,
+        arrows: lineArrows,
+      });
     } else if (tool === "rect" || tool === "ellipse") {
       setDraft({ ...base, type: tool, latlngs: [ll, ll] });
     }
@@ -535,11 +597,11 @@ export default function AnnotationCanvas({
           <SegmentShape
             key={shape.id}
             shape={shape}
-            variant={shape.type}
             project={project}
             unproject={unproject}
             scale={scale}
             draggable={draggable}
+            selected={isSelected}
             refCb={isDraft ? () => {} : registerRef(shape.id)}
             onSelect={selectShape}
             onUpdateShape={onUpdateShape}
