@@ -133,6 +133,8 @@ interface Props {
   onSelect: (id: string | null) => void;
   onAddShape: (shape: Shape) => void;
   onUpdateShape: (id: string, patch: Partial<Shape>) => void;
+  // Gomme : suppression immédiate d'une forme.
+  onDeleteShape: (id: string) => void;
   onRequestSelectTool: () => void;
   // Déclenche l'édition d'un texte depuis l'UI (bouton Éditer).
   editRequestId?: string | null;
@@ -163,10 +165,14 @@ interface SegmentProps {
 
 const HANDLE_RADIUS = 8;
 
-// Zoom de référence des symboles : leur taille est exprimée à ce zoom, pas au
-// zoom courant, pour que deux symboles posés à des zooms différents aient la
-// même taille terrain.
-const SYMBOL_BASE_ZOOM = 18;
+// Zoom de référence des symboles et des formes dessinées (trait, crayon,
+// rectangle, ellipse) : taille et épaisseur sont exprimées à ce zoom, pas au
+// zoom courant, pour que deux formes créées à des zooms différents aient la
+// même taille terrain. Le texte, lui, garde le zoom de création.
+const REF_ZOOM = 18;
+
+// Épaisseur réelle des formes dessinées = curseur d'épaisseur / ce diviseur.
+const STROKE_DIVISOR = 4;
 
 // Trait à 2 points (plein ou tirets, avec 0, 1 ou 2 têtes de flèche).
 // Déplaçable en bloc ; longueur et orientation se règlent en tirant les
@@ -197,7 +203,11 @@ function SegmentShape({
   // Les anciennes formes "arrow" n'ont pas de champ `arrows`.
   const arrows: LineArrows =
     shape.arrows ?? (shape.type === "arrow" ? "end" : "none");
-  const headLen = arrows === "none" ? 0 : (10 + shape.strokeWidth) * scale;
+  // Tête de flèche proportionnée au trait (épaisseur déjà divisée).
+  const headLen =
+    arrows === "none"
+      ? 0
+      : ((10 + shape.strokeWidth * STROKE_DIVISOR) / STROKE_DIVISOR) * scale;
   // Le fût s'arrête un peu avant la pointe pour ne pas dépasser sous la tête.
   const x0 = arrows === "both" ? -halfLen + headLen * 0.7 : -halfLen;
   const x1 = Math.max(x0, arrows === "none" ? halfLen : halfLen - headLen * 0.7);
@@ -338,6 +348,7 @@ export default function AnnotationCanvas({
   onSelect,
   onAddShape,
   onUpdateShape,
+  onDeleteShape,
   onRequestSelectTool,
   editRequestId,
   onEditRequestHandled,
@@ -438,6 +449,11 @@ export default function AnnotationCanvas({
 
     if (tool === "pan") return;
 
+    if (tool === "eraser") {
+      if (hitId) onDeleteShape(hitId);
+      return;
+    }
+
     // Clic/tap sur une annotation existante → sélection (jamais création/édition).
     if (!onEmpty && hitId) {
       if (tool !== "select") onRequestSelectTool();
@@ -466,7 +482,7 @@ export default function AnnotationCanvas({
           size: (30 + strokeWidth * 4) / 12,
           color: def.color ?? color,
           strokeWidth,
-          baseZoom: SYMBOL_BASE_ZOOM,
+          baseZoom: REF_ZOOM,
           baseBearing: bearing,
         });
       } else {
@@ -479,7 +495,7 @@ export default function AnnotationCanvas({
           fontSize: (22 + strokeWidth * 4) / 12,
           color: def?.color ?? color,
           strokeWidth,
-          baseZoom: SYMBOL_BASE_ZOOM,
+          baseZoom: REF_ZOOM,
           baseBearing: bearing,
         });
       }
@@ -491,8 +507,8 @@ export default function AnnotationCanvas({
     const base = {
       id: newId(),
       color,
-      strokeWidth,
-      baseZoom: zoom,
+      strokeWidth: strokeWidth / STROKE_DIVISOR,
+      baseZoom: REF_ZOOM,
       baseBearing: bearing,
     };
     if (tool === "pen") {
@@ -510,7 +526,18 @@ export default function AnnotationCanvas({
     }
   }
 
-  function handleMove() {
+  function handleMove(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
+    if (tool === "eraser") {
+      const pressed =
+        e.evt.type === "touchmove" || ((e.evt as MouseEvent).buttons & 1) === 1;
+      const stage = stageRef.current;
+      const pos = pointer();
+      if (!pressed || !stage || !pos) return;
+      const hit = stage.getIntersection(pos);
+      const id = hit ? shapeIdAt(hit) : null;
+      if (id) onDeleteShape(id);
+      return;
+    }
     if (!drawing.current || !draft) return;
     const pos = pointer();
     if (!pos) return;
@@ -579,6 +606,10 @@ export default function AnnotationCanvas({
     const isSelected = selectedId === shape.id && !isDraft;
     const selectShape = (e?: Konva.KonvaEventObject<Event>) => {
       if (e) e.cancelBubble = true;
+      if (tool === "eraser") {
+        onDeleteShape(shape.id);
+        return;
+      }
       if (tool !== "select") onRequestSelectTool();
       onSelect(shape.id);
     };

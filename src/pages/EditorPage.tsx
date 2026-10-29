@@ -58,6 +58,10 @@ export default function EditorPage() {
   );
 
   const [shapes, setShapes] = useState<Shape[]>(initialProject?.shapes ?? []);
+  // Miroir toujours à jour de `shapes`, pour les suppressions en rafale (gomme)
+  // qui peuvent s'enchaîner avant un nouveau rendu.
+  const shapesRef = useRef(shapes);
+  shapesRef.current = shapes;
   // Historique : états précédents (Annuler) et états annulés (Rétablir).
   const [past, setPast] = useState<Shape[][]>([]);
   const [future, setFuture] = useState<Shape[][]>([]);
@@ -162,6 +166,17 @@ export default function EditorPage() {
 
   function updateShape(id: string, patch: Partial<Shape>) {
     commit(shapes.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  function deleteShape(id: string) {
+    const current = shapesRef.current;
+    if (!current.some((s) => s.id === id)) return;
+    const next = current.filter((s) => s.id !== id);
+    shapesRef.current = next;
+    setPast((p) => [...p, current]);
+    setFuture([]);
+    setShapes(next);
+    if (selectedId === id) setSelectedId(null);
   }
 
   function deleteSelected() {
@@ -342,6 +357,7 @@ export default function EditorPage() {
               onSelect={setSelectedId}
               onAddShape={addShape}
               onUpdateShape={updateShape}
+              onDeleteShape={deleteShape}
               onRequestSelectTool={() => setTool("select")}
               editRequestId={editTextRequestId}
               onEditRequestHandled={handleEditRequestHandled}

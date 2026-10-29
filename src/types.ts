@@ -40,6 +40,7 @@ export type EditorBaseLayer = "ignPlan" | "ignPhoto";
 export type ToolKind =
   | "select"
   | "pan"
+  | "eraser"
   | "pen"
   | "line"
   | "rect"
@@ -56,7 +57,7 @@ export type LineArrows = "none" | "end" | "both";
 
 // "arrow" : ancien type de forme (projets enregistrés), rendu comme un trait
 // avec `arrows: "end"`. Les nouveaux traits utilisent `type: "line"`.
-export type ShapeType = Exclude<ToolKind, "select" | "pan"> | "arrow";
+export type ShapeType = Exclude<ToolKind, "select" | "pan" | "eraser"> | "arrow";
 
 // Une forme dessinée, ancrée en coordonnées géographiques pour suivre
 // le zoom/déplacement de la carte. Les tailles (épaisseur, police, symbole)

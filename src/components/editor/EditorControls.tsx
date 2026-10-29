@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import type { LineArrows, ToolKind } from "../../types";
 import { SYMBOLS, svgToDataUrl } from "./symbols";
 import "./EditorControls.css";
@@ -34,13 +35,24 @@ interface Props {
   onExport: () => void;
 }
 
-const TOOLS: { kind: ToolKind; icon: string; label: string }[] = [
+// Pictogramme gomme (pas d'emoji dédié en Unicode).
+const ERASER_ICON = (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+    <g transform="rotate(-45 12 12)">
+      <rect x="3" y="8" width="18" height="8" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <rect x="12" y="8" width="9" height="8" rx="1.5" fill="currentColor" />
+    </g>
+  </svg>
+);
+
+const TOOLS: { kind: ToolKind; icon: ReactNode; label: string }[] = [
   { kind: "pan", icon: "✋", label: "Déplacer la carte" },
   {
     kind: "select",
     icon: "↖",
     label: "Sélectionner et déplacer une annotation",
   },
+  { kind: "eraser", icon: ERASER_ICON, label: "Gomme : effacer au clic ou au passage" },
   { kind: "pen", icon: "✎", label: "Crayon" },
   { kind: "line", icon: "／", label: "Trait / flèche" },
   { kind: "rect", icon: "▭", label: "Rectangle" },
@@ -63,7 +75,8 @@ const LINE_ARROWS: { arrows: LineArrows; icon: string; label: string }[] = [
 const COLORS = ["#d62828", "#1b6ec2", "#2a9d8f", "#e9c46a", "#000000", "#ffffff"];
 
 export default function EditorControls(props: Props) {
-  const stylable = props.tool !== "select" && props.tool !== "pan";
+  const stylable =
+    props.tool !== "select" && props.tool !== "pan" && props.tool !== "eraser";
   // Sous-menu ouvert dans le dock bas-droite (un seul à la fois).
   const [openGroup, setOpenGroup] = useState<null | "nav" | "actions">(null);
   const toggleGroup = (g: "nav" | "actions") =>
