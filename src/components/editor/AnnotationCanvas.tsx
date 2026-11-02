@@ -170,7 +170,7 @@ const HANDLE_RADIUS = 8;
 const REF_ZOOM = 18;
 
 // Épaisseur réelle des formes dessinées = curseur d'épaisseur / ce diviseur.
-const STROKE_DIVISOR = 4;
+export const STROKE_DIVISOR = 4;
 
 // Police des textes : la même sur le canvas et dans l'éditeur inline.
 const TEXT_FONT = "Arial, Helvetica, sans-serif";

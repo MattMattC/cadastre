@@ -3,10 +3,12 @@ import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import type Konva from "konva";
 import type { Map as MaplibreMap } from "maplibre-gl";
 import MapLibreEditorMap from "../components/editor/MapLibreEditorMap";
-import AnnotationCanvas from "../components/editor/AnnotationCanvas";
+import AnnotationCanvas, {
+  STROKE_DIVISOR,
+} from "../components/editor/AnnotationCanvas";
 import Toolbar from "../components/editor/Toolbar";
 import EditorControls from "../components/editor/EditorControls";
-import { SYMBOLS } from "../components/editor/symbols";
+import { SYMBOLS, getSymbol } from "../components/editor/symbols";
 import {
   getPendingParcelles,
   getProject,
@@ -29,6 +31,21 @@ interface Pt {
   x: number;
   y: number;
 }
+
+// Formes dont l'épaisseur est stockée « curseur / STROKE_DIVISOR ».
+const DRAWN_TYPES: Shape["type"][] = ["pen", "line", "arrow", "rect", "ellipse"];
+
+// Une forme sélectionnée peut-elle être recolorée ? Les pictogrammes SVG et
+// les emojis ignorent `color`, inutile d'afficher le panneau pour eux.
+function isRestylable(shape: Shape): boolean {
+  if (shape.type !== "symbol") return true;
+  const def = shape.symbolId ? getSymbol(shape.symbolId) : undefined;
+  return def?.kind === "text";
+}
+
+// Deux réglages de style successifs sur la même forme, dans cette fenêtre,
+// ne forment qu'une seule étape d'historique (glisser du curseur, pipette).
+const STYLE_COALESCE_MS = 800;
 
 export default function EditorPage() {
   const navigate = useNavigate();
@@ -81,6 +98,8 @@ export default function EditorPage() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  // Dernier réglage de style appliqué à la sélection (pour fusionner l'historique).
+  const styleEditRef = useRef<{ key: string; at: number } | null>(null);
 
   const handleMap = useCallback((map: MaplibreMap) => {
     mapRef.current = map;
@@ -162,9 +181,29 @@ export default function EditorPage() {
   }
 
   function commit(next: Shape[]) {
+    styleEditRef.current = null;
     setPast((p) => [...p, shapes]);
     setFuture([]);
     setShapes(next);
+  }
+
+  // Applique un réglage de style (couleur, épaisseur, tirets, flèches) à la
+  // forme sélectionnée. `key` identifie le réglage pour fusionner les
+  // modifications rapprochées en une seule étape d'historique.
+  function restyleSelected(patch: Partial<Shape>, key: string) {
+    if (!selectedId) return;
+    const next = shapes.map((s) =>
+      s.id === selectedId ? { ...s, ...patch } : s,
+    );
+    const fullKey = selectedId + ":" + key;
+    const last = styleEditRef.current;
+    const now = Date.now();
+    if (last && last.key === fullKey && now - last.at < STYLE_COALESCE_MS) {
+      setShapes(next);
+    } else {
+      commit(next);
+    }
+    styleEditRef.current = { key: fullKey, at: now };
   }
 
   function addShape(shape: Shape) {
@@ -202,6 +241,7 @@ export default function EditorPage() {
 
   function undo() {
     if (past.length === 0) return;
+    styleEditRef.current = null;
     const previous = past[past.length - 1];
     setFuture((f) => [...f, shapes]);
     setShapes(previous);
@@ -211,6 +251,7 @@ export default function EditorPage() {
 
   function redo() {
     if (future.length === 0) return;
+    styleEditRef.current = null;
     const next = future[future.length - 1];
     setPast((p) => [...p, shapes]);
     setShapes(next);
@@ -321,6 +362,19 @@ export default function EditorPage() {
 
   const panMode = tool === "pan";
 
+  // En mode sélection, le panneau de style pilote la forme sélectionnée
+  // plutôt que les réglages de l'outil courant.
+  const selectedShape =
+    tool === "select" && selectedId
+      ? shapes.find((s) => s.id === selectedId) ?? null
+      : null;
+  const restyling = selectedShape !== null && isRestylable(selectedShape);
+  const selectedIsDrawn =
+    selectedShape !== null && DRAWN_TYPES.includes(selectedShape.type);
+  const selectedIsLine =
+    selectedShape !== null &&
+    (selectedShape.type === "line" || selectedShape.type === "arrow");
+
   return (
     <div className="editor">
       <Toolbar
@@ -371,14 +425,44 @@ export default function EditorPage() {
         <EditorControls
           tool={tool}
           setTool={setTool}
-          color={color}
-          setColor={setColor}
-          strokeWidth={strokeWidth}
-          setStrokeWidth={setStrokeWidth}
-          lineDashed={lineDashed}
-          setLineDashed={setLineDashed}
-          lineArrows={lineArrows}
-          setLineArrows={setLineArrows}
+          styleScope={
+            restyling
+              ? "selection"
+              : tool === "select" || tool === "pan" || tool === "eraser"
+                ? null
+                : "tool"
+          }
+          strokeEditable={!restyling || selectedIsDrawn}
+          lineOptions={restyling ? selectedIsLine : tool === "line"}
+          color={restyling ? selectedShape.color : color}
+          setColor={
+            restyling ? (c) => restyleSelected({ color: c }, "color") : setColor
+          }
+          strokeWidth={
+            restyling
+              ? Math.round(selectedShape.strokeWidth * STROKE_DIVISOR)
+              : strokeWidth
+          }
+          setStrokeWidth={
+            restyling
+              ? (w) =>
+                  restyleSelected({ strokeWidth: w / STROKE_DIVISOR }, "stroke")
+              : setStrokeWidth
+          }
+          lineDashed={restyling ? selectedShape.dashed === true : lineDashed}
+          setLineDashed={
+            restyling ? (d) => restyleSelected({ dashed: d }, "dashed") : setLineDashed
+          }
+          lineArrows={
+            restyling
+              ? // Les anciennes formes « arrow » n'ont pas de champ `arrows`.
+                selectedShape.arrows ??
+                (selectedShape.type === "arrow" ? "end" : "none")
+              : lineArrows
+          }
+          setLineArrows={
+            restyling ? (a) => restyleSelected({ arrows: a }, "arrows") : setLineArrows
+          }
           currentSymbol={currentSymbol}
           setCurrentSymbol={setCurrentSymbol}
           canUndo={past.length > 0}

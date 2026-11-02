@@ -7,6 +7,13 @@ import "./EditorControls.css";
 interface Props {
   tool: ToolKind;
   setTool: (t: ToolKind) => void;
+  // Cible du panneau de style : réglages de l'outil courant, forme
+  // sélectionnée, ou panneau masqué.
+  styleScope: "tool" | "selection" | null;
+  // Afficher le curseur d'épaisseur (masqué pour un texte sélectionné).
+  strokeEditable: boolean;
+  // Afficher les options de trait (tirets, flèches).
+  lineOptions: boolean;
   color: string;
   setColor: (c: string) => void;
   strokeWidth: number;
@@ -73,8 +80,7 @@ const LINE_ARROWS: { arrows: LineArrows; icon: string; label: string }[] = [
 const COLORS = ["#d62828", "#1b6ec2", "#2a9d8f", "#e9c46a", "#000000", "#ffffff"];
 
 export default function EditorControls(props: Props) {
-  const stylable =
-    props.tool !== "select" && props.tool !== "pan" && props.tool !== "eraser";
+  const stylable = props.styleScope !== null;
   // Sous-menu ouvert dans le dock bas-droite (un seul à la fois).
   const [openGroup, setOpenGroup] = useState<null | "nav" | "actions">(null);
   const toggleGroup = (g: "nav" | "actions") =>
@@ -105,6 +111,9 @@ export default function EditorControls(props: Props) {
       {/* Style (couleur + épaisseur) : visible quand un outil de dessin est actif. */}
       {stylable && (
         <div className="ec ec--style">
+          {props.styleScope === "selection" && (
+            <div className="ec__caption">Forme sélectionnée</div>
+          )}
           <div className="ec__swatches">
             {COLORS.map((c) => (
               <button
@@ -127,18 +136,20 @@ export default function EditorControls(props: Props) {
               title="Couleur personnalisée"
             />
           </div>
-          <div className="ec__stroke">
-            <input
-              type="range"
-              min={1}
-              max={24}
-              value={props.strokeWidth}
-              onChange={(e) => props.setStrokeWidth(Number(e.target.value))}
-              title="Épaisseur"
-            />
-            <span className="ec__stroke-val">{props.strokeWidth}px</span>
-          </div>
-          {props.tool === "line" && (
+          {props.strokeEditable && (
+            <div className="ec__stroke">
+              <input
+                type="range"
+                min={1}
+                max={24}
+                value={props.strokeWidth}
+                onChange={(e) => props.setStrokeWidth(Number(e.target.value))}
+                title="Épaisseur"
+              />
+              <span className="ec__stroke-val">{props.strokeWidth}px</span>
+            </div>
+          )}
+          {props.lineOptions && (
             <div className="ec__opts">
               {LINE_STYLES.map((o) => (
                 <button
